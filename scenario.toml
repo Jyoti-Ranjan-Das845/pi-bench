@@ -1,0 +1,15 @@
+# PolicyBeats Leaderboard scenario.toml
+# Format follows AgentBeats tutorial: https://docs.agentbeats.dev/tutorial/
+
+[green_agent]
+agentbeats_id = ""  # Fill with green agent UUID from AgentBeats after registration
+env = {}            # PolicyBeats green agent needs no API keys (deterministic, no LLM judges)
+
+[[participants]]
+agentbeats_id = ""  # Fill with purple agent UUID from AgentBeats
+name = "agent"
+env = { OPENAI_API_KEY = "${OPENAI_API_KEY}" }
+
+[config]
+domain = "policy_compliance"
+num_tasks = 36

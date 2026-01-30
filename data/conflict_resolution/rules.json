@@ -1,0 +1,7 @@
+{
+  "policy_pack_id": "conflict-resolution-v1.0.0",
+  "version": "1.0.0",
+  "resolution": "deny_overrides",
+  "per_scenario_packs": true,
+  "rules": []
+}

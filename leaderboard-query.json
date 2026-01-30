@@ -1,0 +1,6 @@
+[
+  {
+    "name": "Policy Compliance Leaderboard",
+    "query": "SELECT id, ROUND(overall * 100, 1) AS \"Overall\", ROUND(compliance * 100, 1) AS \"Compliance\", ROUND(understanding * 100, 1) AS \"Understanding\", ROUND(robustness * 100, 1) AS \"Robustness\", ROUND(process * 100, 1) AS \"Process\", ROUND(restraint * 100, 1) AS \"Restraint\", ROUND(conflict * 100, 1) AS \"Conflict\", ROUND(detection * 100, 1) AS \"Detection\", ROUND(explain * 100, 1) AS \"Explain\", ROUND(adaptation * 100, 1) AS \"Adaptation\", ROUND(time_used, 1) AS \"Time\" FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY id ORDER BY overall DESC) AS rn FROM (SELECT results.participants.agent AS id, res.metrics['task_type:compliance'] AS compliance, res.metrics['task_type:understanding'] AS understanding, res.metrics['task_type:robustness'] AS robustness, res.metrics['task_type:process'] AS process, res.metrics['task_type:restraint'] AS restraint, res.metrics['task_type:conflict_resolution'] AS conflict, res.metrics['task_type:detection'] AS detection, res.metrics['task_type:explainability'] AS explain, res.metrics['task_type:adaptation'] AS adaptation, res.metrics['overall'] AS overall, res.time_used AS time_used FROM results CROSS JOIN UNNEST(results.results) AS r(res))) WHERE rn = 1 ORDER BY \"Overall\" DESC;"
+  }
+]

@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from policybeats.policy import compile_policy_pack
-from policybeats.packs.hard_scenarios import (
+from pi_bench.policy import compile_policy_pack
+from pi_bench.packs.hard_scenarios import (
     ALL_HARD_SCENARIOS,
     HARD_PACK,
     HARD_RULES,

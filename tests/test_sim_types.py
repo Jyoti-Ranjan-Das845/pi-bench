@@ -2,7 +2,7 @@
 
 import pytest
 
-from policybeats.sim.types import (
+from pi_bench.sim.types import (
     DBSnapshot,
     EffectKind,
     LLMCallEffect,

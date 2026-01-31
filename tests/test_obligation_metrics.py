@@ -1,8 +1,8 @@
 """Tests for per-obligation-type metrics in SummaryMetrics."""
 
-from policybeats.policy import forbid_substring, require_tool, require_prior_tool
-from policybeats.score import aggregate, score_episode
-from policybeats.types import (
+from pi_bench.policy import forbid_substring, require_tool, require_prior_tool
+from pi_bench.score import aggregate, score_episode
+from pi_bench.types import (
     EpisodeBundle, EpisodeMetadata, EventKind, ExposedState,
     ObligationType, PolicyPack, PolicyVerdict, SummaryMetrics, TraceEvent,
 )

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from policybeats.sim.tools import (
+from pi_bench.sim.tools import (
     crud_create,
     crud_delete,
     crud_list,
@@ -15,7 +15,7 @@ from policybeats.sim.tools import (
     tool_schema,
     write_tool,
 )
-from policybeats.sim.types import DBSnapshot
+from pi_bench.sim.types import DBSnapshot
 
 
 class TestExecuteTool:

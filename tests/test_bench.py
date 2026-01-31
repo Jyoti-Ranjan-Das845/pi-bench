@@ -1,8 +1,8 @@
 """Tests for the PurpleBench runner facade."""
 
-from policybeats.bench import BenchScenario, run_bench
-from policybeats.policy import forbid_substring
-from policybeats.types import (
+from pi_bench.bench import BenchScenario, run_bench
+from pi_bench.policy import forbid_substring
+from pi_bench.types import (
     EventKind,
     ExposedState,
     PolicyPack,

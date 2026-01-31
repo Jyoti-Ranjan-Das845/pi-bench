@@ -13,20 +13,20 @@ Two purple agents are tested:
 import json
 import pytest
 
-from policybeats.purple.agent import (
+from pi_bench.purple.agent import (
     create_purple_agent,
     PurpleAgentMode,
 )
-from policybeats.packs.gdpr_support import (
+from pi_bench.packs.gdpr_support import (
     GDPR_EPISODES,
     GDPR_SUPPORT_PACK,
     episode_to_a2a_scenario,
     evaluate_results,
     get_policy_pack_for_episode,
 )
-from policybeats.policy import compile_policy_pack
-from policybeats.trace import normalize_trace
-from policybeats.types import ExposedState, PolicyVerdict
+from pi_bench.policy import compile_policy_pack
+from pi_bench.trace import normalize_trace
+from pi_bench.types import ExposedState, PolicyVerdict
 
 
 class TestPurpleAgentResponses:

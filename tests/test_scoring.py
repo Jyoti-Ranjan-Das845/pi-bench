@@ -5,9 +5,9 @@ Tests the full flow: EpisodeBundle -> score_episode -> EpisodeResult
 Not testing internal implementation details.
 """
 
-from policybeats.policy import forbid_substring
-from policybeats.score import aggregate, score_episode
-from policybeats.types import (
+from pi_bench.policy import forbid_substring
+from pi_bench.score import aggregate, score_episode
+from pi_bench.types import (
     EpisodeBundle,
     EpisodeMetadata,
     EventKind,
@@ -206,7 +206,7 @@ def test_forbid_substring_detects_tool_args_gateway():
     Per GOAL.md Section 18: DON'T obligations can fail via tool argument leak.
     Example: send_email(body="SECRET info")
     """
-    from policybeats.policy import forbid_substring
+    from pi_bench.policy import forbid_substring
 
     # Text gateway is clean, but tool args contain SECRET
     trace = (
@@ -242,7 +242,7 @@ def test_forbid_pii_detects_tool_args_gateway():
 
     Example: log_audit(data="SSN: 123-45-6789")
     """
-    from policybeats.policy import forbid_pii_pattern
+    from pi_bench.policy import forbid_pii_pattern
 
     trace = (
         TraceEvent(i=0, kind=EventKind.USER_MESSAGE, actor="user", payload={"content": "log this"}),
@@ -275,7 +275,7 @@ def test_require_tool_with_required_args_detects_wrong_args():
 
     Per GOAL.md Section 18: DO obligations can fail via wrong arguments.
     """
-    from policybeats.policy import require_tool
+    from pi_bench.policy import require_tool
 
     trace = (
         TraceEvent(i=0, kind=EventKind.USER_MESSAGE, actor="user", payload={"content": "verify"}),
@@ -307,7 +307,7 @@ def test_require_tool_with_must_succeed_detects_error():
     """
     require_tool with must_succeed=True detects tool error failure mode.
     """
-    from policybeats.policy import require_tool
+    from pi_bench.policy import require_tool
 
     trace = (
         TraceEvent(i=0, kind=EventKind.USER_MESSAGE, actor="user", payload={"content": "audit"}),
@@ -343,7 +343,7 @@ def test_require_prior_tool_interleaved_violation():
     Per GOAL.md Section 18: ORDER obligations can fail via interleaved violation.
     Example: A₁ → B₁ → B₂ (second B without second A)
     """
-    from policybeats.policy import require_prior_tool
+    from pi_bench.policy import require_prior_tool
 
     trace = (
         TraceEvent(i=0, kind=EventKind.USER_MESSAGE, actor="user", payload={"content": "process"}),

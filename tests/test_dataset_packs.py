@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from policybeats.policy import compile_policy_pack
-from policybeats.packs.loader import (
+from pi_bench.policy import compile_policy_pack
+from pi_bench.packs.loader import (
     CATEGORIES,
     load_all,
     load_pack,

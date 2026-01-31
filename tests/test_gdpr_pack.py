@@ -11,7 +11,7 @@ These tests verify:
 import json
 import pytest
 
-from policybeats.packs.gdpr_support import (
+from pi_bench.packs.gdpr_support import (
     GDPR_SUPPORT_PACK,
     GDPR_RULES,
     GDPR_EPISODES,
@@ -267,7 +267,7 @@ class TestIntegrationWithPolicyEngine:
 
     def test_pack_compiles(self):
         """Policy pack should compile without errors."""
-        from policybeats.policy import compile_policy_pack
+        from pi_bench.policy import compile_policy_pack
 
         policy_fn, errors = compile_policy_pack(GDPR_SUPPORT_PACK)
         assert len(errors) == 0

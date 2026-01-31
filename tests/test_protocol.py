@@ -1,6 +1,6 @@
 """Tests for Environment from_dict/to_dict round-trip with custom fields."""
 
-from policybeats.a2a.protocol import Environment
+from pi_bench.a2a.protocol import Environment
 
 
 class TestEnvironmentExtraFields:

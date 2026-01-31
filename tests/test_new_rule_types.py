@@ -7,7 +7,7 @@ Each test follows the GDPR dataset pattern: binary pass/fail with evidence point
 
 import pytest
 
-from policybeats.policy import (
+from pi_bench.policy import (
     # New rule constructors
     detect_refusal,
     forbid_input_leakage,
@@ -18,8 +18,8 @@ from policybeats.policy import (
     # Compilation
     compile_policy_pack,
 )
-from policybeats.score import score_episode
-from policybeats.types import (
+from pi_bench.score import score_episode
+from pi_bench.types import (
     EpisodeBundle,
     EpisodeMetadata,
     EventKind,

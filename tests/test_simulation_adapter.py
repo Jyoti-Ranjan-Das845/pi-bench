@@ -4,7 +4,7 @@ Tests for simulation adapter.
 Uses native frozen types — no mocks needed.
 """
 
-from policybeats.simulation_adapter import (
+from pi_bench.simulation_adapter import (
     Message,
     RewardInfo,
     SimulationRun,
@@ -12,7 +12,7 @@ from policybeats.simulation_adapter import (
     message_to_event,
     simulation_to_bundle,
 )
-from policybeats.types import EventKind
+from pi_bench.types import EventKind
 
 
 def test_message_to_event_user_message():

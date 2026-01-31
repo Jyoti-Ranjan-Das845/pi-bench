@@ -2,13 +2,13 @@
 
 import pytest
 
-from policybeats.sim.orchestration import (
+from pi_bench.sim.orchestration import (
     init_simulation,
     integrate_tool_result,
     step,
     to_episode_trace,
 )
-from policybeats.sim.types import (
+from pi_bench.sim.types import (
     DBSnapshot,
     DoneEffect,
     LLMCallEffect,

@@ -1,13 +1,13 @@
 """Integration tests: full bench → scoring → metrics path."""
 
-from policybeats.bench import BenchScenario, run_bench
-from policybeats.policy import (
+from pi_bench.bench import BenchScenario, run_bench
+from pi_bench.policy import (
     forbid_substring, forbid_pattern, forbid_pii_pattern, forbid_field_disclosure,
     forbid_cross_tenant, require_tool, require_role, require_consent_flag,
     require_trace_event, require_escalation_on, require_prior_tool, sequence,
     require_state_field,
 )
-from policybeats.types import EventKind, ExposedState, PolicyPack, TraceEvent
+from pi_bench.types import EventKind, ExposedState, PolicyPack, TraceEvent
 
 
 def _event(kind, actor, payload, call_id=None):

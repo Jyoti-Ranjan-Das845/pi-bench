@@ -2,10 +2,10 @@
 
 import pytest
 
-from policybeats.adapters.domains.mock import create_mock_domain
-from policybeats.adapters.runner import run_simulation, run_with_mock_llm
-from policybeats.ports.llm import MockLLMPort
-from policybeats.sim.types import (
+from pi_bench.adapters.domains.mock import create_mock_domain
+from pi_bench.adapters.runner import run_simulation, run_with_mock_llm
+from pi_bench.ports.llm import MockLLMPort
+from pi_bench.sim.types import (
     MessageKind,
     TaskConfig,
     TerminationReason,
@@ -149,7 +149,7 @@ class TestTaskLoader:
 
     def test_mock_task_loader(self):
         """Test mock task loader has tasks."""
-        from policybeats.ports.tasks import create_mock_task_loader
+        from pi_bench.ports.tasks import create_mock_task_loader
 
         loader = create_mock_task_loader()
 
@@ -159,7 +159,7 @@ class TestTaskLoader:
 
     def test_load_task(self):
         """Test loading a specific task."""
-        from policybeats.ports.tasks import create_mock_task_loader
+        from pi_bench.ports.tasks import create_mock_task_loader
 
         loader = create_mock_task_loader()
         task = loader.load("echo_task")
@@ -170,7 +170,7 @@ class TestTaskLoader:
 
     def test_load_missing_task_raises(self):
         """Test loading missing task raises KeyError."""
-        from policybeats.ports.tasks import create_mock_task_loader
+        from pi_bench.ports.tasks import create_mock_task_loader
 
         loader = create_mock_task_loader()
 

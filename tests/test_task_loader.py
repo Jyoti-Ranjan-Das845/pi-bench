@@ -7,12 +7,12 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from policybeats.adapters.task_loader import (
+from pi_bench.adapters.task_loader import (
     JSONTaskLoader,
     create_task_loader,
     taskspec_to_config,
 )
-from policybeats.sim.types import (
+from pi_bench.sim.types import (
     EvaluationCriteria,
     ExpectedAction,
     TaskSpec,

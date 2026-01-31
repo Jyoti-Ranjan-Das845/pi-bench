@@ -5,10 +5,10 @@ Verifies that identical inputs produce identical outputs.
 This is the core guarantee from AGENT_SPEC §5.
 """
 
-from policybeats.policy import forbid_substring
-from policybeats.score import score_episode
-from policybeats.trace import canonical_trace_json_bytes, trace_hash
-from policybeats.types import (
+from pi_bench.policy import forbid_substring
+from pi_bench.score import score_episode
+from pi_bench.trace import canonical_trace_json_bytes, trace_hash
+from pi_bench.types import (
     EpisodeBundle,
     EpisodeMetadata,
     EventKind,

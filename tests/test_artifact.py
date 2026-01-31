@@ -4,10 +4,10 @@ Tests for artifact creation and serialization.
 Verifies that artifact creation is deterministic and produces valid JSON.
 """
 
-from policybeats.artifact import artifact_to_json, canonical_json_bytes, make_artifact
-from policybeats.policy import forbid_substring
-from policybeats.score import score_episode
-from policybeats.types import (
+from pi_bench.artifact import artifact_to_json, canonical_json_bytes, make_artifact
+from pi_bench.policy import forbid_substring
+from pi_bench.score import score_episode
+from pi_bench.types import (
     EpisodeBundle,
     EpisodeMetadata,
     EventKind,

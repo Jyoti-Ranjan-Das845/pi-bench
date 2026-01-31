@@ -50,3 +50,9 @@ htmlcov/
 # Exclude all root .md files except README.md
 /*.md
 !/README.md
+
+# Documentation backup
+docs-backup/
+
+# Claude Code sessions
+*.txt

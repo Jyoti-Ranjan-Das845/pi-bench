@@ -2,24 +2,24 @@
 
 import pytest
 
-from policybeats.a2a.server import (
+from pi_bench.a2a.server import (
     A2AMessage,
     A2AMessagePart,
     A2ARequest,
     get_agent_card,
     parse_assessment_request,
 )
-from policybeats.a2a.scenarios import (
+from pi_bench.a2a.scenarios import (
     ALL_SCENARIOS,
     get_scenario,
     get_scenarios_by_surface,
     scenario_to_task_message,
 )
-from policybeats.a2a.results import (
+from pi_bench.a2a.results import (
     episode_to_task_result,
     summary_to_metrics,
 )
-from policybeats.types import (
+from pi_bench.types import (
     EpisodeResult,
     EpisodeMetadata,
     PolicyScore,
@@ -181,7 +181,7 @@ class TestResults:
         assert result["violations"] == []
 
     def test_episode_to_task_result_violation(self):
-        from policybeats.types import Violation, EvidencePointer
+        from pi_bench.types import Violation, EvidencePointer
 
         episode = EpisodeResult(
             episode_id="ep-2",

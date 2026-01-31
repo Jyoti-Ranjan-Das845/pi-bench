@@ -21,6 +21,7 @@ a2a = [
 [project.scripts]
 policybeats = "policybeats.cli:main"
 policybeats-green = "policybeats.a2a.server:main"
+gpt-oss-sg-120b = "policybeats.purple.nebius_unified_agent:main"
 
 [build-system]
 requires = ["hatchling"]

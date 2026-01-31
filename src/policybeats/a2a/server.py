@@ -355,12 +355,20 @@ async def multi_turn_assess(purple_agent_url: str):
 
 def main():
     """Run the server."""
+    import argparse
     import uvicorn
 
-    port = int(os.getenv("PORT", "8000"))
-    host = os.getenv("HOST", "0.0.0.0")
+    parser = argparse.ArgumentParser(description="PolicyBeats Green Agent")
+    parser.add_argument("--host", default="0.0.0.0", help="Server host")
+    parser.add_argument("--port", type=int, default=9009, help="Server port")
+    parser.add_argument("--card-url", help="Public URL for agent card discovery")
+    args = parser.parse_args()
 
-    uvicorn.run(app, host=host, port=port)
+    # Store card URL in environment if provided (used by get_agent_card)
+    if args.card_url:
+        os.environ["AGENT_URL"] = args.card_url
+
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

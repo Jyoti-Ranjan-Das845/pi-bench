@@ -1,0 +1,35 @@
+# Development files
+.git
+.github
+.claude
+.env
+.env.local
+.env.example
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Documentation
+docs/
+*.md
+!README.md
+*.pdf
+
+# Tests and scripts
+tests/
+scripts/
+examples/
+
+# Results and artifacts
+results/
+*.json
+!data/**/*.json
+
+# Build artifacts
+*.egg-info
+dist/
+build/

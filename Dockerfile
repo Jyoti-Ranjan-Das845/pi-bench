@@ -9,6 +9,7 @@ WORKDIR /app
 
 # Copy only runtime files (no tests, docs, scripts, results)
 COPY pyproject.toml .
+COPY README.md .
 COPY src/ src/
 COPY data/ data/
 

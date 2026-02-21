@@ -270,6 +270,9 @@ class AssessmentReport:
     violations: list[ViolationRecord] = field(default_factory=list)
     scenario_results: dict[str, dict[str, Any]] = field(default_factory=dict)
 
+    # Verification (leaderboard)
+    scenario_hashes: dict[str, str] = field(default_factory=dict)
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON/leaderboard."""
         return {
@@ -292,6 +295,7 @@ class AssessmentReport:
             "run_metrics": self.run_metrics.to_dict(),
             "violations": [v.to_dict() for v in self.violations],
             "scenario_results": self.scenario_results,
+            "scenario_hashes": self.scenario_hashes,
         }
 
 

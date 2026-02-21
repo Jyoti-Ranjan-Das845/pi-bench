@@ -592,6 +592,23 @@ class AssessmentEngine:
             }
             report.total_scenarios += 1
 
+            # Compute scenario hash for verification
+            import hashlib
+            scenario_dict = {
+                "scenario_id": scenario.scenario_id,
+                "turns": [
+                    {
+                        "turn_number": t.turn_number,
+                        "instruction": t.instruction,
+                        "rules_to_check": list(t.rules_to_check),
+                    }
+                    for t in scenario.turns
+                ],
+            }
+            scenario_json = json.dumps(scenario_dict, sort_keys=True)
+            scenario_hash = hashlib.sha256(scenario_json.encode()).hexdigest()[:16]
+            report.scenario_hashes[scenario.scenario_id] = scenario_hash
+
         for rule_id, r in rule_results.items():
             report.scores_by_rule[rule_id] = sum(r) / len(r) if r else 0.0
         for category, r in category_results.items():

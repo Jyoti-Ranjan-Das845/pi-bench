@@ -10,7 +10,7 @@ Supports the pi-bench bootstrap extension (urn:pi-bench:policy-bootstrap:v1):
 benchmark context and tools are sent once and cached per context_id.
 
 Usage:
-    python examples/a2a_demo/purple_server.py --model gpt-4o-mini --port 8766
+    python examples/a2a_demo/purple_server.py --model gpt-5.4 --port 8766
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ _DEFAULT_SYSTEM_PROMPT = (
 app = FastAPI(title="pi-bench purple agent")
 
 # Module-level state
-_model: str = "gpt-4o-mini"
+_model: str = "gpt-5.4"
 _seed: int | None = None
 _card_url: str = ""
 _sessions: dict[str, dict] = {}  # context_id -> {system_prompt, benchmark_context, tools}
@@ -313,7 +313,7 @@ def main() -> None:
 
     load_env()
     parser = argparse.ArgumentParser(description="pi-bench purple agent server")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="LiteLLM model name")
+    parser.add_argument("--model", type=str, default="gpt-5.4", help="LiteLLM model name")
     parser.add_argument("--port", type=int, default=8766, help="Server port")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Server host")
     parser.add_argument("--card-url", type=str, default="", help="Public A2A agent-card URL")

@@ -1,258 +1,391 @@
 # pi-bench
 
-Policy interpretation benchmark for AI agents.
+**pi-bench** is a benchmark for evaluating whether AI agents can follow
+operational policy in stateful, tool-using environments.
 
-pi-bench measures how well AI agents comply with complex policies under
-operational pressure. Frontier models score 91-99% on knowledge and reasoning
-benchmarks but only 15-30% on policy compliance tasks. pi-bench provides the
-evaluation instrument to measure that gap.
+pi-bench is not a static policy QA benchmark. It does not only ask whether a
+model can answer questions about a policy. It places an agent inside realistic
+enterprise scenarios, gives it policy documents, database-backed tools, and a
+simulated user, then evaluates whether the agent acts compliantly across the
+full interaction.
 
-## How it works
+pi-bench is designed around one core question:
 
-1. An agent is dropped into a scenario with a policy document and a simulated
-   user. The user may apply pressure (urgency, authority claims, emotional
-   appeals).
+> Can an agent read a governing policy, inspect the current state, use tools
+> correctly, handle user pressure, and make a compliant operational decision?
 
-2. The agent uses tools to investigate, takes actions, and records a decision
-   (ALLOW, DENY, or ESCALATE).
+The current release ships a fixed scenario set, but the benchmark is designed
+to scale. New domains, policies, tools, databases, and scenarios can be added
+without changing the core agent integration contract.
 
-3. Everything is recorded. After the conversation ends, deterministic checks
-   verify: did the agent call the right tools? Avoid the forbidden ones? Make
-   the correct decision? Leave the database in the right state?
+## What pi-bench Provides
 
-4. Result: pass or fail per scenario, aggregated into a 9-column capability
-   profile.
+pi-bench includes:
 
-## Leaderboard Taxonomy
+- **71 policy-compliance scenarios**
+- **3 enterprise domains**
+  - FINRA / financial compliance
+  - retail refunds and returns
+  - IT helpdesk access control
+- **Full policy documents**
+- **Stateful domain databases**
+- **Structured tool schemas**
+- **Multi-turn user simulation**
+- **Deterministic policy and state checks**
+- **Local and A2A-compatible execution paths**
+- **Leaderboard-ready metrics**
 
-pi-bench scores agents across **9 capability columns**, like MTEB scores
-embeddings across task types. Each column answers a different deployment
-question about the same agent.
+Each scenario defines the policy context, initial state, user behavior,
+available tools, expected decision, and evaluation checks.
+
+## Why pi-bench Exists
+
+Operational policy-following is not the same as generic reasoning or
+instruction following.
+
+Real deployed agents must handle:
+
+- messy policy documents,
+- hidden state triggers,
+- incomplete or ambiguous user requests,
+- pressure from users,
+- tool calls that mutate state,
+- privacy and safety boundaries,
+- escalation requirements,
+- and auditability across a full trace.
+
+A model can understand a policy in isolation and still fail when it must act
+under that policy in a live environment. pi-bench measures that gap.
+
+## Benchmark Taxonomy
+
+pi-bench reports performance across **9 capability columns**, grouped into **3
+policy-compliance families**.
 
 ### Policy Understanding
 
-Can the agent find, read, and anchor to the right rule?
-
-| Column | Question | What it means |
-|---|---|---|
-| **Policy Activation** | Does it catch the hidden rule that actually controls the case? | The agent notices a latent, blocking, or scope-defining rule even when the user frames the request around the wrong variable. |
-| **Policy Interpretation** | Does it understand what the rule means? | The agent correctly reads ambiguous, qualified, or nuanced policy language and derives the right meaning. |
-| **Evidence Grounding** | Does it anchor to the right clause / obligation / evidence? | The agent ties its decision to the correct source of authority or facts, not just a plausible answer. |
+| Column | What It Tests |
+|---|---|
+| **Policy Activation** | Whether the agent notices that a hidden or blocking policy rule applies. |
+| **Policy Interpretation** | Whether the agent correctly understands policy meaning, exceptions, and conditions. |
+| **Evidence Grounding** | Whether the agent grounds its decision in the right policy clause or factual evidence. |
 
 ### Policy Execution
 
-Can the agent follow the rule correctly?
-
-| Column | Question | What it means |
-|---|---|---|
-| **Procedural Compliance** | Does it follow the required steps in order? | The agent follows the mandated process correctly instead of skipping checks, gates, or ordering constraints. |
-| **Authorization & Access Control** | Does it check who is allowed? | The agent determines who is permitted to do, approve, or access something based on role, identity, and authority. |
-| **Temporal / State Reasoning** | Does it handle time, history, cumulative limits, evolving state? | The agent reasons correctly over dates, prior actions, accumulated behavior, and changing world state. |
+| Column | What It Tests |
+|---|---|
+| **Procedural Compliance** | Whether the agent follows required steps and ordering constraints. |
+| **Authorization & Access Control** | Whether the agent verifies who is allowed to request, approve, or access something. |
+| **Temporal / State Reasoning** | Whether the agent handles time, history, prior actions, and changing state correctly. |
 
 ### Policy Boundaries
 
-Can the agent stop when it should?
+| Column | What It Tests |
+|---|---|
+| **Safety Boundary Enforcement** | Whether the agent avoids forbidden or unsafe actions. |
+| **Privacy & Information Flow** | Whether the agent avoids leaking internal, private, or restricted information. |
+| **Escalation / Abstention** | Whether the agent knows when to escalate, defer, deny, or abstain. |
 
-| Column | Question | What it means |
-|---|---|---|
-| **Safety Boundary Enforcement** | Does it avoid forbidden actions? | The agent maintains hard operational limits and avoids prohibited or unsafe behavior even under pressure. |
-| **Privacy & Information Flow** | Does it avoid leaking or mis-sharing information? | The agent controls what information can be revealed, to whom, and under what conditions. |
-| **Escalation / Abstention** | Does it know when not to decide? | The agent recognizes missing authority, missing evidence, or policy gaps and defers instead of guessing. |
+## Failure Axes And Scenario Coverage
 
-### Cross-cutting metrics (not columns)
+pi-bench scenarios are written to expose failures along the same operational
+axes used in the taxonomy.
 
-These are scored across the entire benchmark, not as separate columns:
+### Policy Understanding Failures
 
-- **Justification Integrity** — right decision, right reason?
-- **Text-Action Consistency** — does what it says match what it does?
-- **Reliability (pass^k)** — does it pass consistently across repeated runs?
+These include cases where the agent misses the controlling policy trigger,
+misreads ambiguous policy language, uses the wrong clause, or reaches the right
+outcome for the wrong reason.
 
-### What is NOT a column
+The current scenario set covers examples such as hidden AML triggers, policy
+gaps, conflicting provisions, wrong-justification traps, and evidence-grounding
+failures.
 
-- **Stress conditions** (adversarial pressure, ambiguity, multi-turn
-  wear-down, policy drift) are difficulty slices, not capabilities.
-- **Norm Resolution** is a visible subscore under Policy Interpretation.
-- **Label breakdown** (ALLOW/DENY/ESCALATE pass rates) is available in
-  raw data for over/under-refusal analysis but not in the main report.
+### Policy Execution Failures
 
-## Example output
+These include cases where the agent understands the request but fails to execute
+the correct operational process.
 
+The current scenario set covers examples such as skipped verification, missing
+required tool calls, incorrect ordering, failure to update state, failure to
+record a decision, and tool-action mismatch.
+
+### Policy Boundary Failures
+
+These include cases where the agent should stop, deny, escalate, or protect
+information but fails to hold the boundary.
+
+The current scenario set covers examples such as forbidden action attempts,
+privacy leakage, disclosure of internal risk signals, under-refusal,
+over-refusal, premature closure, and missed escalation.
+
+This list is not closed. pi-bench is intended to grow with new domains, new
+policy surfaces, and new failure modes as agent deployments become more
+complex.
+
+## Agent Integration
+
+pi-bench supports two main integration modes.
+
+## 1. Local Mode
+
+In local mode, the tested agent is a Python object that implements the pi-bench
+local agent interface.
+
+The interface is:
+
+```python
+class Agent:
+    def init_state(
+        self,
+        benchmark_context: list[dict],
+        tools: list[dict],
+        message_history: list[dict] | None = None,
+    ) -> dict:
+        ...
+
+    def generate(self, message: dict, state: dict) -> tuple[dict, dict]:
+        ...
+
+    def is_stop(self, message: dict) -> bool:
+        ...
+
+    def set_seed(self, seed: int) -> None:
+        ...
+
+    def stop(self, message: dict | None, state: dict | None) -> None:
+        ...
 ```
-PI-BENCH RESULTS
-======================================================================
-  Compliance:  82.1%  (32/39 scenarios)
-  Overall:     78.3%  (macro-avg across columns)
 
-  Policy Understanding (75.0%)
-  ------------------------------------------------------------------
-    Policy Activation                    75.0%  (3/4)
-    Policy Interpretation                66.7%  (4/6)
-    Evidence Grounding                  100.0%  (1/1)
+At the start of a scenario, pi-bench gives the agent:
 
-  Policy Execution (80.0%)
-  ------------------------------------------------------------------
-    Procedural Compliance                75.0%  (3/4)
-    Authorization & Access Control       80.0%  (4/5)
-    Temporal / State Reasoning           66.7%  (2/3)
+- `benchmark_context`: policy and task context,
+- `tools`: structured tool schemas available for that scenario,
+- `message_history`: optional prior messages for resumed runs.
 
-  Policy Boundaries (77.8%)
-  ------------------------------------------------------------------
-    Safety Boundary Enforcement         100.0%  (2/2)
-    Privacy & Information Flow          100.0%  (1/1)
-    Escalation / Abstention              66.7%  (2/3)
+The agent returns normal assistant messages and/or structured tool calls.
 
-  Reliability (k=4):
-    PassAll:        61.5%  (compliant in every run)
-    PassAny:        92.3%  (compliant in at least one)
-    ViolationEver:  38.5%  (violated in any run)
+The reference local agent implementation is:
+
+```text
+src/pi_bench/agents/litellm_agent.py
 ```
 
-## Domains
+A local example is available in:
 
-pi-bench includes scenarios across 3 domains:
+```text
+examples/local_demo/
+```
 
-- **finra** — Financial compliance (AML, CTR filing, dual authorization)
-- **retail** — E-commerce return/refund policies
-- **helpdesk** — IT service desk access control
+## 2. A2A Mode
 
-Each domain has a policy document (`policy.md`), database state (`db.json`),
-tool definitions (`tools.json`), and scenario files under `scenarios/`.
+In A2A mode, pi-bench runs as a green benchmark server and evaluates a remote
+purple agent over an A2A-compatible HTTP interface.
 
-## Quick start
+The green server is started with:
 
 ```bash
-# List available scenarios
+pi-bench-green --host 0.0.0.0 --port 9009
+```
+
+A purple agent should expose an A2A message endpoint that accepts conversation
+turns and returns assistant text and/or structured tool calls.
+
+pi-bench also supports the optional policy bootstrap extension:
+
+```text
+urn:pi-bench:policy-bootstrap:v1
+```
+
+If a purple agent implements this extension, pi-bench sends the benchmark
+context and tool schemas once, receives a `context_id`, and then sends only
+conversation turns afterward.
+
+If the purple agent does not implement bootstrap, pi-bench falls back to a
+normal stateless request flow.
+
+A2A examples are available in:
+
+```text
+examples/a2a_demo/
+```
+
+These examples show how to serve a LiteLLM-based purple agent and how to run
+pi-bench against it.
+
+## Quick Start
+
+Install locally:
+
+```bash
+python -m pip install -e .
+```
+
+Set your model provider key:
+
+```bash
+export OPENAI_API_KEY="..."
+```
+
+List scenarios:
+
+```bash
 pi list
-
-# Run a single scenario
-pi run scenarios/retail/scen_040_final_sale_restocking_tradeoff.json --model gpt-4o
-
-# Run all scenarios in a domain
-pi run-domain finra --model gpt-4o --trials 4
 ```
 
-## Scenario Schema
+Run a single scenario:
 
-Every scenario is a JSON file with `schema_version: "pibench_scenario_v1"`.
-Authoring guide at [docs/guides/scenario-authoring.md](docs/guides/scenario-authoring.md).
-
-### Top-level structure
-
-```
-schema_version            string — always "pibench_scenario_v1"
-meta                      object — scenario identity and metadata
-leaderboard               object — capability classification (drives the 9-column report)
-label                     string — expected verdict: ALLOW, ALLOW-CONDITIONAL, DENY, ESCALATE
-decision_contract         object — how the agent's decision is resolved (identical across scenarios)
-policy_context            object — which policy document and clauses apply
-environment_setup         object — database state, customer/employee identity, current time
-user_simulation           object — persona, opening message, pressure script
-ablation_hints            object — structured policy + no-pressure message (for future ablation)
-evidence_pointer_contract object — what to include in failure evidence (for future reporting)
-evaluation_criteria       object — the checks that determine pass/fail
+```bash
+pi run scenarios/retail/scen_020_standard_refund.json \
+  --agent-llm gpt-4o-mini \
+  --no-solo \
+  --user-llm gpt-4.1-mini
 ```
 
-### `meta` — scenario identity
+Run one domain:
 
-| Field | Type | Consumed by | Purpose |
-|---|---|---|---|
-| `scenario_id` | string | `scenario_loader.load()` | Unique ID (e.g., `SCEN_010_CTR_THRESHOLD_WIRE`) |
-| `domain` | string | `scenario_loader.load()` | Resolves domain directory for policy, tools, db |
-| `notes` | string | `scenario_loader._build_task_description()` | Included in benchmark task context to describe what the scenario tests |
-| `policy_pack` | string | — | Documentation only |
-| `created_at` | date string | — | Documentation only |
-| `timezone` | string | — | Documentation only |
+```bash
+pi run-domain finra \
+  --agent-llm gpt-4o-mini \
+  --no-solo \
+  --user-llm gpt-4.1-mini \
+  --num-trials 1 \
+  --concurrency 1
+```
 
-### `leaderboard` — capability classification
+Start the A2A green benchmark server:
 
-Each scenario has exactly one primary leaderboard column. This directly
-drives the benchmark report.
+```bash
+pi-bench-green --host 0.0.0.0 --port 9009
+```
 
-| Field | Type | Consumed by | Purpose |
-|---|---|---|---|
-| `primary` | string | `scenario_loader.load()` → `metrics.compute_metrics()` | One of the 9 leaderboard columns (see taxonomy above) |
-| `subskills` | array of strings | — | Finer-grained diagnostic tags (e.g., `"Norm Resolution"`, `"Justification Integrity"`) |
-| `stressors` | array of strings | — | Pressure/difficulty conditions (e.g., `"User Pressure"`, `"Baseline"`, `"Deadline / Urgency"`) |
+Run the local A2A demo:
 
-### `label` — expected verdict
+```bash
+python examples/a2a_demo/run_a2a.py \
+  --model gpt-4o-mini \
+  --user-model gpt-4.1-mini \
+  --serve-user \
+  --scenarios-dir scenarios \
+  --concurrency 1
+```
 
-| Value | Meaning |
+## Decision Signal
+
+Each scenario expects the agent to make a final policy decision.
+
+The preferred decision channel is the `record_decision` tool.
+
+Allowed decisions are:
+
+| Decision | Meaning |
 |---|---|
-| `ALLOW` | Agent should perform the action without escalation |
-| `ALLOW-CONDITIONAL` | Agent should allow, but only after meeting specific conditions |
-| `DENY` | Agent must refuse and not perform the forbidden action |
-| `ESCALATE` | Agent must refuse and invoke a specific escalation mechanism |
+| `ALLOW` | The request can proceed now because policy requirements are satisfied. |
+| `ALLOW-CONDITIONAL` | The request can proceed only if required conditions are met. |
+| `DENY` | The request must not be fulfilled because policy blocks it or requirements are not met. |
+| `ESCALATE` | The case needs review or action by the appropriate higher authority. |
 
-**Consumed by:** `event_flags.compute_flags()` — controls which flags fire
-(under-refusal for DENY scenarios, over-refusal for ALLOW scenarios,
-escalation accuracy for ESCALATE scenarios).
+Multiple `record_decision` calls are allowed. The final valid call is treated
+as the canonical decision.
 
-### `policy_context` — which rules apply
+If no valid decision tool call is present, pi-bench can fall back to a valid
+fenced JSON decision block.
 
-| Field | Type | Consumed by | Purpose |
-|---|---|---|---|
-| `policy_text_ref` | path string | `scenario_loader.load()` | Loads the policy document the agent reads via `read_policy` tool |
-| `policy_version` | string | — | Documentation only |
-| `policy_clauses` | array of objects | — | Documentation/authoring metadata. Not exposed to the tested agent; the full policy is provided separately. |
+## Evaluation
 
-### `environment_setup` — world state
+pi-bench evaluates each scenario using deterministic checks over the trace and
+final state.
 
-| Field | Type | Consumed by | Purpose |
-|---|---|---|---|
-| `now` | ISO 8601 string | `scenario_loader.load()` | Injected as `db["now"]` for time-aware tools |
-| `customer` | object | `scenario_loader.load()` | Finra/retail: customer identity |
-| `account` | object | `scenario_loader.load()` | Finra: account identity |
-| `employee` | object | `scenario_loader.load()` | Helpdesk: injected as `db["employee"]` |
-| `initial_state_patch` | object | `scenario_loader.load()` | Deep-merged onto domain `db.json` to create scenario-specific state |
+A scenario can include checks such as:
 
-The `initial_state_patch` is the heart of the scenario — it hides the key
-facts the agent must discover through tool calls. Structure varies by domain.
+- whether a required tool was called,
+- whether a forbidden tool was avoided,
+- whether a tool was called with required arguments,
+- whether tools were called in the required order,
+- whether the final database state is correct,
+- whether the canonical decision matches the expected label,
+- whether the agent avoided prohibited disclosures.
 
-### `user_simulation` — the simulated user
+The main result fields are:
 
-| Field | Type | Consumed by | Purpose |
-|---|---|---|---|
-| `persona` | string | `ScriptedUser`, `LiteLLMUser` | Sets the user sim identity ("You are a {persona}") |
-| `initial_user_message` | string | `ScriptedUser.generate()`, `assessment.py`, `orchestrator.init()` | First user message; also used in A2A ticket construction and as solo trigger fallback when no `task["ticket"]` exists |
-| `pressure_script` | array of strings | `ScriptedUser.generate()`, `LiteLLMUser` | Turn-by-turn escalating pressure messages (3-5 entries) |
-
-### `evaluation_criteria` — pass/fail checks
-
-The core of the evaluation pipeline. Determines whether the agent passed.
-
-| Field | Type | Consumed by | Purpose |
-|---|---|---|---|
-| `reward_basis` | array of strings | `evaluator.evaluate()` | Which evaluators to run: `POLICY`, `STATE_FIELD`, `NL_JUDGE` |
-| `policy_checks` | array of check objects | `evaluator.evaluate_policy()` | Deterministic trace checks (tier 1 — gates pass/fail) |
-| `state_field_checks` | array of check objects | `evaluator.evaluate_db_checks()` | DB state assertions (tier 1) |
-| `nl_judge_checks` | array of check objects | `evaluator.evaluate_nl_judge_checks()` | LLM judge assertions (tier 2 — semantic score only) |
-
-**Check types in `policy_checks`:**
-
-| Type | Fields | What it checks |
-|---|---|---|
-| `tool_called` | `tool_name` | Tool appeared in trace |
-| `tool_not_called` | `tool_name` | Tool absent from trace (identifies forbidden tools) |
-| `tool_called_with` | `tool_name`, `arguments` | Tool called with specific args (subset match) |
-| `tool_called_any` | `tool_names` | At least one of listed tools called |
-| `tool_called_min_times` | `tool_name`, `min_times` | Tool called N+ times |
-| `tool_before_tool` | `first_tool`, `second_tool` | Ordering constraint |
-| `decision_equals` | `equals` | Agent's canonical decision matches expected |
-
-**Evaluation tiers:**
-- **Tier 1** (POLICY, STATE_FIELD): Deterministic. Gates `all_passed` and `reward`.
-- **Tier 2** (NL_JUDGE): Semantic. Contributes to `semantic_score` only, does not gate pass/fail.
-
-### Fields not consumed by code (documentation / future use)
-
-| Field | Purpose |
+| Field | Meaning |
 |---|---|
-| `decision_contract` | Documents how decision resolution works (identical across all scenarios) |
-| `ablation_hints.structured_policy` | IF-THEN version of policy logic (for future ablation modes) |
-| `ablation_hints.no_pressure_user_message` | Neutral version of user request (for future ablation) |
-| `evidence_pointer_contract` | What evidence to include in failure reports (for future reporting) |
+| `overall_score` | Macro-average score across the 9 taxonomy columns. |
+| `compliance_rate` | Strict full-pass rate across scenarios. |
+| `by_group` | Scores for Policy Understanding, Policy Execution, and Policy Boundaries. |
+| `by_column` | Scores for each of the 9 capability columns. |
+| `event_flag_rates` | Aggregate violation, refusal, escalation, and forbidden-attempt signals. |
+| `scenario_details` | Per-scenario result details, including reward, decision, checks, flags, and trace metadata. |
 
-## Taxonomy design
+## Event Flags
 
-See [docs/taxonomy-migration.md](docs/taxonomy-migration.md)
-for the research basis (64-paper review) behind the 9-column taxonomy.
+pi-bench reports event-level signals that explain how an agent failed.
+
+| Flag | Meaning |
+|---|---|
+| `violation_rate` | Fraction of completed scenarios with at least one failed policy or state check. |
+| `under_refusal_rate` | Rate of allowing or acting when the scenario required denial. |
+| `over_refusal_rate` | Rate of refusing or escalating when the scenario should be allowed. |
+| `escalation_accuracy_rate` | Rate of correct escalation behavior on escalation scenarios. |
+| `attempt_rate` | Rate of attempting forbidden tools or actions. |
+
+These flags help explain failure shape, not only final score.
+
+## Repository Structure
+
+```text
+src/pi_bench/              Core benchmark runtime
+domains/                   Domain policies, tools, and base databases
+scenarios/                 Scenario JSON files
+examples/local_demo/       Local execution example
+examples/a2a_demo/         A2A green/purple/user examples
+scripts/                   Utility scripts for validation and runs
+```
+
+## AgentBeats / Competition Entrypoint
+
+The benchmark exposes an AgentBeats-compatible green server through:
+
+```bash
+pi-bench-green --host 0.0.0.0 --port 9009
+```
+
+The green server evaluates a submitted purple agent and returns
+leaderboard-compatible result JSON.
+
+The expected container entrypoint is:
+
+```text
+pi-bench-green --host 0.0.0.0 --port 9009
+```
+
+## Leaderboard
+
+The leaderboard repository is:
+
+```text
+https://github.com/Jyoti-Ranjan-Das845/pi-bench-leaderboard
+```
+
+The leaderboard reports:
+
+- Policy Understanding
+- Policy Execution
+- Policy Boundaries
+- Overall score
+- Full compliance
+- Event flag diagnostics
+
+## Citation
+
+If you use pi-bench, cite the benchmark and leaderboard artifacts.
+
+```bibtex
+@misc{pibench2026,
+  title        = {pi-bench: A Stateful Policy-Compliance Benchmark for Tool-Using Agents},
+  author       = {Pi-Bench Contributors},
+  year         = {2026},
+  howpublished = {\url{https://github.com/Jyoti-Ranjan-Das845/pi-bench}},
+  note         = {Leaderboard: https://github.com/Jyoti-Ranjan-Das845/pi-bench-leaderboard}
+}
+```

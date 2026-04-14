@@ -123,16 +123,54 @@ This list is not closed. pi-bench is intended to grow with new domains, new
 policy surfaces, and new failure modes as agent deployments become more
 complex.
 
-## Agent Integration
+## How To Use pi-bench With Your Agent
 
-pi-bench supports two main integration modes.
+pi-bench evaluates an agent by driving a complete assessment loop: it sends the
+agent policy/task context, gives it structured tools, runs the simulated user,
+executes tool calls against the environment, and scores the resulting trace.
 
-## 1. Local Mode
+To connect an existing agent, implement a small wrapper around it. The wrapper
+does not need to change the agent's internal architecture. It only needs to
+tell pi-bench how to initialize the agent, send the next message, receive tool
+calls or text, and cleanly stop after the run.
+
+At the start of an assessment, pi-bench provides:
+
+- `benchmark_context`: policy and task context as structured nodes,
+- `tools`: structured tool schemas available for the scenario,
+- `message_history`: optional prior messages for resumed runs.
+
+Agent builders can store that context however they want: system prompt, memory,
+RAG store, session state, or another internal representation.
+
+For A2A agents, pi-bench also supports a bootstrap flow. If the agent declares
+the bootstrap extension, pi-bench sends the policy/task context and tool schemas
+once, receives a `context_id`, and then sends only conversation turns for the
+rest of the run. This avoids repeatedly sending the full policy and tool list,
+which reduces token waste. If bootstrap is not supported, pi-bench falls back
+to a normal stateless flow where the needed benchmark context is included in
+requests.
+
+pi-bench supports two integration modes.
+
+### 1. Local Mode
 
 In local mode, the tested agent is a Python object that implements the pi-bench
 local agent interface.
 
-The interface is:
+The protocol is defined in:
+
+```text
+src/pi_bench/local/protocol.py
+```
+
+It can be imported from:
+
+```python
+from pi_bench.local import AgentProtocol
+```
+
+The protocol has five core methods:
 
 ```python
 class Agent:
@@ -157,13 +195,15 @@ class Agent:
         ...
 ```
 
-At the start of a scenario, pi-bench gives the agent:
+`init_state(...)` receives the benchmark context and tool schemas. The agent
+can convert them into its own prompt, memory, or internal session format.
 
-- `benchmark_context`: policy and task context,
-- `tools`: structured tool schemas available for that scenario,
-- `message_history`: optional prior messages for resumed runs.
+`generate(...)` receives the latest benchmark message and returns the next
+assistant message plus updated agent state. That assistant message may contain
+text, tool calls, or both.
 
-The agent returns normal assistant messages and/or structured tool calls.
+`is_stop(...)`, `set_seed(...)`, and `stop(...)` let the runtime handle
+termination, reproducibility, and cleanup consistently.
 
 The reference local agent implementation is:
 
@@ -177,7 +217,7 @@ A local example is available in:
 examples/local_demo/
 ```
 
-## 2. A2A Mode
+### 2. A2A Mode
 
 In A2A mode, pi-bench runs as a green benchmark server and evaluates a remote
 purple agent over an A2A-compatible HTTP interface.
@@ -191,18 +231,14 @@ pi-bench-green --host 0.0.0.0 --port 9009
 A purple agent should expose an A2A message endpoint that accepts conversation
 turns and returns assistant text and/or structured tool calls.
 
-pi-bench also supports the optional policy bootstrap extension:
+A purple agent can optionally declare the bootstrap extension in its agent card:
 
 ```text
 urn:pi-bench:policy-bootstrap:v1
 ```
 
-If a purple agent implements this extension, pi-bench sends the benchmark
-context and tool schemas once, receives a `context_id`, and then sends only
-conversation turns afterward.
-
-If the purple agent does not implement bootstrap, pi-bench falls back to a
-normal stateless request flow.
+When this extension is present, pi-bench uses the one-time context handoff
+described above. Otherwise, it uses the normal stateless A2A path.
 
 A2A examples are available in:
 

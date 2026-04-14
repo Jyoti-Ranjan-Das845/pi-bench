@@ -81,7 +81,7 @@ def build_agent_card(host: str, port: int, card_url: str | None = None) -> Agent
         version=__version__,
         default_input_modes=["application/json"],
         default_output_modes=["application/json"],
-        capabilities=AgentCapabilities(),
+        capabilities=AgentCapabilities(streaming=True),
         skills=[skill],
     )
 

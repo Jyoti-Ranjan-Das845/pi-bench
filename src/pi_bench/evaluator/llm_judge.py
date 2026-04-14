@@ -66,14 +66,24 @@ def clear_judge_cache() -> None:
 
 def _call_judge(messages: list[dict]) -> str:
     """Make a single LLM judge call. Returns raw response text."""
-    response = litellm.completion(
-        model=_JUDGE_MODEL,
-        messages=messages,
-        temperature=0.0,
-        max_tokens=512,
-        timeout=30,
-    )
+    kwargs = {
+        "model": _JUDGE_MODEL,
+        "messages": messages,
+        "max_tokens": 512,
+        "timeout": 30,
+        "drop_params": True,
+    }
+    if not _uses_fixed_temperature(_JUDGE_MODEL):
+        kwargs["temperature"] = 0.1
+
+    response = litellm.completion(**kwargs)
     return response.choices[0].message.content.strip()
+
+
+def _uses_fixed_temperature(model: str) -> bool:
+    """Return True for model families that reject custom temperature values."""
+    normalized = model.split("/", 1)[-1].lower()
+    return normalized.startswith("gpt-5")
 
 
 def judge_nl_assertion(
@@ -87,8 +97,9 @@ def judge_nl_assertion(
     Returns (passed, detail) where passed is True if the judge's answer
     matches the expected_answer.
 
-    Spec 1.3 bounding: T=0, max_tokens=512, 30s timeout, 1 retry on
-    parse failure, per-run caching on (text_hash, question).
+    Spec 1.3 bounding: T=0.1 when supported, max_tokens=512, 30s
+    timeout, 1 retry on parse failure, per-run caching on
+    (text_hash, question).
     """
     cache_store = _judge_cache if cache is None else cache
 

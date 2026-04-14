@@ -322,6 +322,7 @@ The main result fields are:
 |---|---|
 | `overall_score` | Macro-average score across the 9 taxonomy columns. |
 | `compliance_rate` | Strict full-pass rate across scenarios. |
+| `scenario_details[].semantic_score` | Per-scenario Tier 2 semantic/NL-judge diagnostic score. The leaderboard averages this as `Semantic Score`. |
 | `by_group` | Scores for Policy Understanding, Policy Execution, and Policy Boundaries. |
 | `by_column` | Scores for each of the 9 capability columns. |
 | `event_flag_rates` | Aggregate violation, refusal, escalation, and forbidden-attempt signals. |
@@ -384,6 +385,7 @@ The leaderboard reports:
 - Policy Boundaries
 - Overall score
 - Full compliance
+- Semantic Score
 - Event flag diagnostics
 
 ## Citation

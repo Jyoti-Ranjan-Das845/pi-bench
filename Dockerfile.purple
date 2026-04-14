@@ -2,8 +2,8 @@
 
 FROM python:3.11-slim
 
-LABEL org.opencontainers.image.title="pibench-purpley"
-LABEL org.opencontainers.image.description="PI-Bench example A2A purple agent"
+LABEL org.opencontainers.image.title="policy-gpt"
+LABEL org.opencontainers.image.description="PI-Bench A2A purple agent for AgentBeats"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -29,4 +29,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:9009/health || exit 1
 
 ENTRYPOINT ["python", "examples/a2a_demo/purple_server.py"]
-CMD ["--host", "0.0.0.0", "--port", "9009"]
+CMD ["--model", "gpt-5.4", "--host", "0.0.0.0", "--port", "9009"]

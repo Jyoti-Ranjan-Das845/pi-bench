@@ -26,8 +26,8 @@ import litellm
 
 logger = logging.getLogger(__name__)
 
-# Default judge model — fast and cheap. Override via set_judge_model().
-_JUDGE_MODEL = "gpt-4o-mini"
+# Default judge model. Override via set_judge_model().
+_JUDGE_MODEL = "gpt-5.2"
 
 _SYSTEM_PROMPT = """\
 You are a compliance auditor reviewing a customer service conversation.

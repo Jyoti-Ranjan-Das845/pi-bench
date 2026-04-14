@@ -143,6 +143,22 @@ At the start of an assessment, pi-bench provides:
 Agent builders can store that context however they want: system prompt, memory,
 RAG store, session state, or another internal representation.
 
+The common integration idea is a **five-function wrapper** around the agent.
+Any agent that implements this wrapper can be tested with pi-bench, regardless
+of how the agent is built internally.
+
+The five functions answer the questions pi-bench needs during assessment:
+
+- how to initialize the agent for a scenario,
+- how to generate the next response,
+- how to detect whether the agent is finished,
+- how to set a reproducibility seed,
+- and how to clean up after the run.
+
+This wrapper is intentionally small. It lets pi-bench run the benchmark loop
+without forcing agent builders to use a specific prompt format, memory layout,
+model provider, framework, or tool-calling implementation.
+
 For A2A agents, pi-bench also supports a bootstrap flow. If the agent declares
 the bootstrap extension, pi-bench sends the policy/task context and tool schemas
 once, receives a `context_id`, and then sends only conversation turns for the

@@ -125,49 +125,42 @@ complex.
 
 ## How To Use pi-bench With Your Agent
 
-pi-bench evaluates an agent by driving a complete assessment loop: it sends the
-agent policy/task context, gives it structured tools, runs the simulated user,
-executes tool calls against the environment, and scores the resulting trace.
+pi-bench does not require agents to be built inside this repository. To run and
+trace an agent through the benchmark, wrap the agent with the five operations
+pi-bench needs during assessment:
 
-To connect an existing agent, implement a small wrapper around it. The wrapper
-does not need to change the agent's internal architecture. It only needs to
-tell pi-bench how to initialize the agent, send the next message, receive tool
-calls or text, and cleanly stop after the run.
+```python
+def init_state(
+    self,
+    benchmark_context: list[dict],
+    tools: list[dict],
+    message_history: list[dict] | None = None,
+) -> dict: ...
 
-At the start of an assessment, pi-bench provides:
+def generate(self, message: dict, state: dict) -> tuple[dict, dict]: ...
 
-- `benchmark_context`: policy and task context as structured nodes,
-- `tools`: structured tool schemas available for the scenario,
-- `message_history`: optional prior messages for resumed runs.
+def is_stop(self, message: dict) -> bool: ...
 
-Agent builders can store that context however they want: system prompt, memory,
-RAG store, session state, or another internal representation.
+def set_seed(self, seed: int) -> None: ...
 
-The common integration idea is a **five-function wrapper** around the agent.
-Any agent that implements this wrapper can be tested with pi-bench, regardless
-of how the agent is built internally.
+def stop(self, message: dict | None, state: dict | None) -> None: ...
+```
 
-The five functions answer the questions pi-bench needs during assessment:
+`init_state` receives the policy/task context and available tool schemas.
+`generate` returns the next assistant message, with text, tool calls, or both.
+The remaining methods let the benchmark handle stopping, reproducibility, and
+cleanup.
 
-- how to initialize the agent for a scenario,
-- how to generate the next response,
-- how to detect whether the agent is finished,
-- how to set a reproducibility seed,
-- and how to clean up after the run.
+Any agent or wrapper that implements these operations can be assessed by
+pi-bench. The agent maker decides how to store the benchmark context: system
+prompt, memory, RAG, session state, or any other internal design.
 
-This wrapper is intentionally small. It lets pi-bench run the benchmark loop
-without forcing agent builders to use a specific prompt format, memory layout,
-model provider, framework, or tool-calling implementation.
+For network integrations, pi-bench can use a bootstrap flow. With bootstrap,
+policy/task context and tool schemas are sent once, a `context_id` is returned,
+and later turns send only the conversation. Without bootstrap, the needed
+context is included in each stateless request.
 
-For A2A agents, pi-bench also supports a bootstrap flow. If the agent declares
-the bootstrap extension, pi-bench sends the policy/task context and tool schemas
-once, receives a `context_id`, and then sends only conversation turns for the
-rest of the run. This avoids repeatedly sending the full policy and tool list,
-which reduces token waste. If bootstrap is not supported, pi-bench falls back
-to a normal stateless flow where the needed benchmark context is included in
-requests.
-
-pi-bench supports two integration modes.
+pi-bench supports two ways to expose this integration.
 
 ### 1. Local Mode
 
@@ -186,41 +179,6 @@ It can be imported from:
 from pi_bench.local import AgentProtocol
 ```
 
-The protocol has five core methods:
-
-```python
-class Agent:
-    def init_state(
-        self,
-        benchmark_context: list[dict],
-        tools: list[dict],
-        message_history: list[dict] | None = None,
-    ) -> dict:
-        ...
-
-    def generate(self, message: dict, state: dict) -> tuple[dict, dict]:
-        ...
-
-    def is_stop(self, message: dict) -> bool:
-        ...
-
-    def set_seed(self, seed: int) -> None:
-        ...
-
-    def stop(self, message: dict | None, state: dict | None) -> None:
-        ...
-```
-
-`init_state(...)` receives the benchmark context and tool schemas. The agent
-can convert them into its own prompt, memory, or internal session format.
-
-`generate(...)` receives the latest benchmark message and returns the next
-assistant message plus updated agent state. That assistant message may contain
-text, tool calls, or both.
-
-`is_stop(...)`, `set_seed(...)`, and `stop(...)` let the runtime handle
-termination, reproducibility, and cleanup consistently.
-
 The reference local agent implementation is:
 
 ```text
@@ -233,10 +191,10 @@ A local example is available in:
 examples/local_demo/
 ```
 
-### 2. A2A Mode
+### 2. Network / A2A Mode
 
-In A2A mode, pi-bench runs as a green benchmark server and evaluates a remote
-purple agent over an A2A-compatible HTTP interface.
+In network mode, pi-bench runs as a green benchmark server and evaluates a
+remote purple agent over an A2A-compatible HTTP interface.
 
 The green server is started with:
 

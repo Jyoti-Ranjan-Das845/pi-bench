@@ -49,7 +49,7 @@ class StubAgent:
     def set_seed(self, seed):
         pass
 
-    def init_state(self, system_messages, tools, message_history=None):
+    def init_state(self, benchmark_context, tools, message_history=None):
         return {}
 
     def generate(self, message, state):

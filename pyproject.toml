@@ -13,6 +13,7 @@ dependencies = [
     "httpx>=0.27",
     "a2a-sdk>=0.2",
     "starlette>=0.27",
+    "sse-starlette>=2.1",
     "typing-extensions>=4.0",
 ]
 
@@ -35,3 +36,4 @@ packages = ["src/pi_bench", "domains"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-p no:capture -p no:rerunfailures"

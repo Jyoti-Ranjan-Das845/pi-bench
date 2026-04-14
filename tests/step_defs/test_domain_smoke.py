@@ -409,7 +409,7 @@ class TestRunnerAPIPath:
     def test_retail_get_environment_with_scenario(self):
         """get_environment(scenario) should seed DB from scenario."""
         from domains.retail import get_environment
-        path = SCENARIOS_DIR / "retail" / "scen_020_standard_refund.json"
+        path = SCENARIOS_DIR / "retail" / "scen_044_fraud_flag_cash_refund.json"
         with open(path) as f:
             scenario = json.load(f)
         env = get_environment(scenario=scenario)
@@ -418,7 +418,7 @@ class TestRunnerAPIPath:
     def test_helpdesk_get_environment_with_scenario(self):
         """get_environment(scenario) should seed DB from scenario."""
         from domains.helpdesk import get_environment
-        path = SCENARIOS_DIR / "helpdesk" / "scen_030_standard_password_reset.json"
+        path = SCENARIOS_DIR / "helpdesk" / "scen_046_cross_employee_disclosure.json"
         with open(path) as f:
             scenario = json.load(f)
         env = get_environment(scenario=scenario)

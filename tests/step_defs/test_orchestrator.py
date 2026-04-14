@@ -22,7 +22,7 @@ def _stub_agent_text(text, stop_after=None):
             self.seed = None
             self.model_name = "stub-agent-text"
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             return {"messages": list(message_history or [])}
 
         def generate(self, message, state):
@@ -53,7 +53,7 @@ def _stub_agent_tool_calls(tool_calls, then_text="Done", then_stop=False):
             self.seed = None
             self.model_name = "stub-agent-tools"
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             return {"messages": list(message_history or [])}
 
         def generate(self, message, state):
@@ -84,7 +84,7 @@ def _stub_agent_error():
             self.seed = None
             self.model_name = "stub-agent-error"
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             return {}
 
         def generate(self, message, state):
@@ -109,7 +109,7 @@ def _stub_agent_always_bad_tool():
             self.seed = None
             self.model_name = "stub-agent-bad-tool"
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             return {"messages": []}
 
         def generate(self, message, state):
@@ -285,6 +285,57 @@ def _make_mock_env():
 def _make_mock_env_with_user_tools():
     from domains.mock import get_environment_with_user_tools
     return get_environment_with_user_tools()
+
+
+def test_solo_trigger_prefers_ticket_over_initial_user_message():
+    from pi_bench.orchestrator.core import init
+
+    agent = _stub_agent_text("ok")
+    env = {
+        "domain_name": "mock",
+        "policy": "Policy text",
+        "tool_schemas": [],
+        "tools": {},
+        "db": {},
+        "solo_mode": True,
+    }
+    task = {
+        "id": "task_1",
+        "description": "Task description",
+        "ticket": "Prepared ticket",
+        "user_scenario": {"initial_user_message": "Initial customer request"},
+    }
+
+    state = init(agent=agent, user=None, env=env, task=task, solo=True)
+
+    assert state.current_message == {"role": "user", "content": "Prepared ticket"}
+    assert state.trajectory == [state.current_message]
+
+
+def test_solo_trigger_falls_back_to_initial_user_message():
+    from pi_bench.orchestrator.core import init
+
+    agent = _stub_agent_text("ok")
+    env = {
+        "domain_name": "mock",
+        "policy": "Policy text",
+        "tool_schemas": [],
+        "tools": {},
+        "db": {},
+        "solo_mode": True,
+    }
+    task = {
+        "id": "task_1",
+        "description": "Task description",
+        "user_scenario": {"initial_user_message": "Initial customer request"},
+    }
+
+    state = init(agent=agent, user=None, env=env, task=task, solo=True)
+
+    assert state.current_message == {
+        "role": "user",
+        "content": "Initial customer request",
+    }
 
 
 # --- Given: agents ---

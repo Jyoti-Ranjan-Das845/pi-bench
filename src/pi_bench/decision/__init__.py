@@ -23,7 +23,8 @@ _FENCED_BLOCK_RE = re.compile(r"```(?:json)?\s*\n(.*?)\n```", re.DOTALL)
 class InvalidRun:
     """A run where no valid canonical decision could be extracted."""
 
-    reason: str  # MULTIPLE_DECISIONS_TOOL, MULTIPLE_DECISIONS_JSON, MISSING_DECISION
+    reason: str  # INVALID_DECISION, MULTIPLE_DECISIONS_JSON, MISSING_DECISION
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -39,11 +40,11 @@ def resolve(trace: TraceRecorder) -> CanonicalDecision | InvalidRun:
 
     Resolution procedure (deterministic):
     1. Extract all record_decision tool calls by assistant.
-    2. If any exist → last call wins (canonical decision from tool).
+    2. If any valid calls exist → last valid call wins.
     3. If count == 0, fall back to JSON blocks in messages.
     4. Multiple JSON-channel decisions → InvalidRun(MULTIPLE_DECISIONS_JSON).
     """
-    # Channel A: Decision Tool — take the LAST call.
+    # Channel A: Decision Tool — take the last valid call.
     # Models legitimately update their decision as conversations evolve
     # (e.g., first DENY, then user escalates → model records ESCALATE too).
     tool_decisions = [
@@ -52,8 +53,19 @@ def resolve(trace: TraceRecorder) -> CanonicalDecision | InvalidRun:
     ]
 
     if tool_decisions:
-        decision = tool_decisions[-1].arguments.get("decision", "")
-        return CanonicalDecision(decision=decision, channel="tool")
+        for entry in reversed(tool_decisions):
+            decision = entry.arguments.get("decision", "")
+            if (
+                isinstance(decision, str)
+                and decision in VALID_DECISIONS
+                and not entry.result_error
+                and not entry.blocked
+            ):
+                return CanonicalDecision(decision=decision, channel="tool")
+        return InvalidRun(
+            reason="INVALID_DECISION",
+            detail="no valid record_decision tool call was found",
+        )
 
     # Channel B: JSON Decision Block (fallback)
     json_decisions = _extract_json_decisions(trace)

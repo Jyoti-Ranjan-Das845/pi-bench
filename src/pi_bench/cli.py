@@ -15,6 +15,21 @@ import sys
 from pathlib import Path
 
 
+def _default_workspace_root() -> Path:
+    from pi_bench.scenario_loader import default_workspace_root
+
+    return default_workspace_root()
+
+
+def _resolve_cli_path(path: str | Path) -> Path:
+    """Resolve CLI paths from cwd first, then the project workspace."""
+    p = Path(path)
+    if p.is_absolute() or p.exists():
+        return p
+    candidate = _default_workspace_root() / p
+    return candidate if candidate.exists() else p
+
+
 def _parse_kv_args(kv_list: list[str] | None) -> dict:
     """Parse key=value argument pairs into a dict."""
     if not kv_list:
@@ -86,7 +101,8 @@ def cmd_run(args: argparse.Namespace) -> None:
     from pi_bench.scenario_loader import load
     from pi_bench.trace import TraceRecorder
 
-    loaded = load(args.scenario)
+    scenario_path = _resolve_cli_path(args.scenario)
+    loaded = load(scenario_path)
     task = loaded["task"]
     env = loaded["env"]
     label = loaded["label"]
@@ -113,8 +129,25 @@ def cmd_run(args: argparse.Namespace) -> None:
     sim["env"] = env
 
     eval_result = evaluate(task, sim, domain={
-        "get_environment": lambda task=None: load(args.scenario)["env"]
+        "get_environment": lambda task=None: load(scenario_path)["env"]
     })
+    from pi_bench.event_flags import compute_flags
+
+    flags = compute_flags(
+        scenario_label=label,
+        trace=trace,
+        canonical_decision=eval_result.get("canonical_decision") or "NONE",
+        policy_checks=task.get("evaluation_criteria", {}).get("policy_checks", []),
+        forbidden_tools=forbidden_tools,
+        messages=sim.get("messages", []),
+    )
+    event_flags = {
+        "V_r": flags.V_r,
+        "UR_r": flags.UR_r,
+        "OR_r": flags.OR_r,
+        "EA_r": flags.EA_r,
+        "AT_r": flags.AT_r,
+    }
 
     # Build and print detailed failure report
     from pi_bench.evaluator.report import build_report, format_report
@@ -127,12 +160,35 @@ def cmd_run(args: argparse.Namespace) -> None:
         step_count=sim.get("step_count", 0),
         tool_calls=trace.tool_names() if trace else [],
     )
+    report["event_flags"] = event_flags
     print()
     print(format_report(report))
 
     # Save results if requested
     if args.save_to:
+        from pi_bench.metrics import compute_metrics, metrics_to_dict
+
+        scenario_result = {
+            "scenario_id": scenario_id,
+            "domain": task.get("domain", ""),
+            "domain_name": task.get("domain_name", ""),
+            "label": label,
+            "leaderboard_primary": task.get("leaderboard_primary", ""),
+            "status": "completed",
+            "reward": eval_result.get("reward"),
+            "all_passed": eval_result.get("all_passed", False),
+            "semantic_score": eval_result.get("semantic_score", 0.0),
+            "canonical_decision": eval_result.get("canonical_decision"),
+            "decision_channel": eval_result.get("decision_channel"),
+            "decision_valid": eval_result.get("decision_valid", False),
+            "decision_error": eval_result.get("decision_error"),
+            "event_flags": event_flags,
+            "dimensions": eval_result.get("dimensions", {}),
+        }
+        metrics = compute_metrics([scenario_result])
         report["outcome_results"] = eval_result["outcome_results"]
+        report["metrics"] = metrics_to_dict(metrics)
+        report["messages"] = sim.get("messages", [])
         Path(args.save_to).write_text(json.dumps(report, indent=2, default=str))
         print(f"\n  Saved to {args.save_to}")
 
@@ -145,7 +201,8 @@ def cmd_run_domain(args: argparse.Namespace) -> None:
     from pi_bench.runner import run_domain
     from pi_bench.scenario_loader import load_domain
 
-    domain = load_domain(args.domain)
+    workspace_root = _default_workspace_root()
+    domain = load_domain(args.domain, workspace_root=workspace_root)
     agent = _build_agent(args)
     user = _build_user(args)
     solo = user is None
@@ -193,10 +250,19 @@ def cmd_run_domain(args: argparse.Namespace) -> None:
 
         scenario_results.append({
             "scenario_id": sim.get("task_id", "?"),
+            "domain": sim.get("domain", ""),
+            "domain_name": sim.get("domain_name", ""),
             "label": sim.get("label", ""),
             "leaderboard_primary": sim.get("leaderboard_primary", ""),
             "status": "completed" if term in ("agent_stop", "user_stop", "max_steps", "agent_error") else "error",
+            "reward": reward.get("reward"),
             "all_passed": reward.get("all_passed", False),
+            "semantic_score": reward.get("semantic_score", 0.0),
+            "canonical_decision": reward.get("canonical_decision"),
+            "decision_channel": reward.get("decision_channel"),
+            "decision_valid": reward.get("decision_valid", False),
+            "decision_error": reward.get("decision_error"),
+            "event_flags": sim.get("event_flags", {}),
             "dimensions": reward.get("dimensions", {}),
         })
 
@@ -238,12 +304,15 @@ def cmd_run_domain(args: argparse.Namespace) -> None:
             print()
             print(format_report(r))
 
+    all_passed = all(r.get("all_passed", False) for r in scenario_results)
+    sys.exit(0 if all_passed else 1)
+
 
 def cmd_list(args: argparse.Namespace) -> None:
     """List available scenarios."""
     from pi_bench.scenario_loader import discover_scenarios
 
-    scenarios_dir = Path(args.scenarios_dir)
+    scenarios_dir = _resolve_cli_path(args.scenarios_dir)
     paths = discover_scenarios(scenarios_dir)
 
     print(f"{'SCENARIO':<50} {'LABEL':<10} {'COLUMN'}")
@@ -259,6 +328,9 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    from pi_bench.env import load_env
+
+    load_env()
     parser = argparse.ArgumentParser(prog="pi", description="pi-bench CLI")
     sub = parser.add_subparsers(dest="command")
 
@@ -319,7 +391,10 @@ def main() -> None:
     # ── list ──
 
     p_list = sub.add_parser("list", help="List available scenarios")
-    p_list.add_argument("--scenarios-dir", default="scenarios")
+    p_list.add_argument(
+        "--scenarios-dir",
+        default=str(_default_workspace_root() / "scenarios"),
+    )
 
     args = parser.parse_args()
     if args.command == "run":

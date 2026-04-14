@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from pi_bench.evaluator.scenario_validator import validate_scenario
-from pi_bench.scenario_loader import _resolve_domain_dir, load
+from pi_bench.scenario_loader import domain_tool_names, load
 
 
 def validate_generated_scenario_structure(scenario: dict[str, Any]) -> list[str]:
@@ -61,24 +61,7 @@ def validate_generated_scenario_structure(scenario: dict[str, Any]) -> list[str]
 
 def domain_tool_names_for_domain(domain_name: str, workspace_root: str | Path) -> set[str]:
     """Return the tool names defined for a domain."""
-    domain_dir = _resolve_domain_dir(domain_name, Path(workspace_root))
-    tools_path = domain_dir / "tools.json"
-    data = json.loads(tools_path.read_text())
-
-    if isinstance(data, dict):
-        definitions = data.get("tool_definitions", [])
-    elif isinstance(data, list):
-        definitions = data
-    else:
-        definitions = []
-
-    tool_names = set()
-    for item in definitions:
-        if isinstance(item, dict):
-            name = item.get("name")
-            if isinstance(name, str) and name:
-                tool_names.add(name)
-    return tool_names
+    return domain_tool_names(domain_name, workspace_root)
 
 
 def collect_tool_references(scenario: dict[str, Any]) -> set[str]:
@@ -113,15 +96,84 @@ def collect_tool_references(scenario: dict[str, Any]) -> set[str]:
     return refs
 
 
+def collect_required_tool_references(scenario: dict[str, Any]) -> set[str]:
+    """Collect tools the evaluator expects the agent to call."""
+    refs: set[str] = set()
+    criteria = scenario.get("evaluation_criteria", {})
+
+    for check in criteria.get("policy_checks", []):
+        check_type = check.get("type")
+        if check_type in {"tool_called", "tool_called_with", "tool_called_min_times"}:
+            tool_name = check.get("tool_name")
+            if isinstance(tool_name, str) and tool_name:
+                refs.add(tool_name)
+        elif check_type == "tool_called_any":
+            for tool_name in check.get("tool_names", []) or []:
+                if isinstance(tool_name, str) and tool_name:
+                    refs.add(tool_name)
+        elif check_type == "tool_before_tool":
+            for key in ("first_tool", "second_tool"):
+                tool_name = check.get(key)
+                if isinstance(tool_name, str) and tool_name:
+                    refs.add(tool_name)
+        elif check_type == "tool_before_tool_any":
+            for tool_name in check.get("first_tools", []) or []:
+                if isinstance(tool_name, str) and tool_name:
+                    refs.add(tool_name)
+            second_tool = check.get("second_tool")
+            if isinstance(second_tool, str) and second_tool:
+                refs.add(second_tool)
+
+    return refs
+
+
 def validate_generated_scenario_tools(
     scenario: dict[str, Any],
     valid_tools: set[str],
 ) -> list[str]:
-    """Ensure all referenced tools exist in the domain tool catalog."""
+    """Ensure scenario tool references are consistent with the domain catalog.
+
+    Tool references are validated against the full domain catalog. This is
+    intentionally different from per-scenario available_tools: a scenario may
+    include a tool_not_called check for a real domain tool that is not exposed
+    to the agent in that scenario.
+    """
     errors: list[str] = []
+    scenario_id = scenario.get("meta", {}).get("scenario_id", "<unknown>")
+
     for tool_name in sorted(collect_tool_references(scenario)):
         if tool_name not in valid_tools:
-            errors.append(f"Unknown tool reference '{tool_name}' for scenario {scenario.get('meta', {}).get('scenario_id', '<unknown>')}")
+            errors.append(
+                f"Unknown tool reference '{tool_name}' for scenario {scenario_id}"
+            )
+
+    available_tools = scenario.get("available_tools")
+    if available_tools is not None:
+        if not isinstance(available_tools, list):
+            errors.append(f"available_tools must be a list for scenario {scenario_id}")
+            return errors
+
+        available_set = {
+            tool_name
+            for tool_name in available_tools
+            if isinstance(tool_name, str) and tool_name
+        }
+        if len(available_set) != len(available_tools):
+            errors.append(
+                f"available_tools contains invalid entries for scenario {scenario_id}"
+            )
+
+        for tool_name in sorted(available_set - valid_tools):
+            errors.append(
+                f"Unknown available_tools entry '{tool_name}' for scenario {scenario_id}"
+            )
+
+        for tool_name in sorted(collect_required_tool_references(scenario)):
+            if tool_name in valid_tools and tool_name not in available_set:
+                errors.append(
+                    f"Required tool '{tool_name}' is not exposed in available_tools "
+                    f"for scenario {scenario_id}"
+                )
     return errors
 
 
@@ -148,10 +200,7 @@ def validate_generated_scenario_file(
         errors.append(f"Failed to load scenario environment: {exc}")
         return errors
 
-    valid_tools = {
-        schema["name"]
-        for schema in loaded["env"].get("tool_schemas", [])
-        if isinstance(schema, dict) and isinstance(schema.get("name"), str)
-    }
+    domain_name = scenario.get("meta", {}).get("domain", "")
+    valid_tools = domain_tool_names_for_domain(domain_name, workspace_root)
     errors.extend(validate_generated_scenario_tools(scenario, valid_tools))
     return errors

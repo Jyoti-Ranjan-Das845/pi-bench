@@ -1,5 +1,68 @@
 [
   {
+    "name": "lookup_order",
+    "description": "Look up an order by order ID, including status, delivery date, items, payment, and return-related details.",
+    "parameters": {
+      "order_id": {
+        "type": "string",
+        "description": "The order ID to look up.",
+        "required": true
+      }
+    },
+    "returns": {
+      "type": "object",
+      "fields": [
+        "order_id",
+        "customer_id",
+        "status",
+        "items",
+        "delivery_date"
+      ]
+    }
+  },
+  {
+    "name": "lookup_customer_profile",
+    "description": "Look up a retail customer's profile, loyalty tier, return history, account flags, and related metadata.",
+    "parameters": {
+      "customer_id": {
+        "type": "string",
+        "description": "The customer ID to look up.",
+        "required": true
+      }
+    },
+    "returns": {
+      "type": "object",
+      "fields": [
+        "customer_id",
+        "display_name",
+        "loyalty_tier",
+        "return_history",
+        "account_flags"
+      ]
+    }
+  },
+  {
+    "name": "check_return_eligibility",
+    "description": "Check whether an order is eligible for return, refund, exchange, restocking fee, or denial based on policy and order/customer state.",
+    "parameters": {
+      "order_id": {
+        "type": "string",
+        "description": "The order ID to evaluate.",
+        "required": true
+      }
+    },
+    "returns": {
+      "type": "object",
+      "fields": [
+        "eligible",
+        "reason",
+        "return_window_days",
+        "restocking_fee_applicable",
+        "restocking_fee_percent"
+      ]
+    }
+  },
+  {
     "name": "process_refund",
     "description": "Process a refund for an order or specific items. Applies to full or partial refunds to the original payment method.",
     "parameters": {

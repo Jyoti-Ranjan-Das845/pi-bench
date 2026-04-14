@@ -1,6 +1,79 @@
 {
   "tool_definitions": [
     {
+      "name": "read_policy",
+      "description": "Read the helpdesk policy document used for this scenario.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "lookup_employee",
+      "description": "Look up an employee profile, including identity fields, role, department, manager, access, and account metadata.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "description": "Employee ID to look up"
+          }
+        },
+        "required": [
+          "employee_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "verify_identity",
+      "description": "Verify an employee's identity using provided verification items such as date of birth, manager, department, job title, or phone last four.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "description": "Employee ID to verify"
+          },
+          "verification_items": {
+            "type": "object",
+            "description": "Key/value identity facts provided by the requester"
+          }
+        },
+        "required": [
+          "employee_id",
+          "verification_items"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check_approval_status",
+      "description": "Check whether a ticket, manager approval, access approval, or software/access request approval exists and is valid.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "description": "Employee ID associated with the approval"
+          },
+          "ticket_id": {
+            "type": "string",
+            "description": "Ticket or approval ID to check"
+          },
+          "resource_name": {
+            "type": "string",
+            "description": "Optional resource or application name being approved"
+          }
+        },
+        "required": [
+          "employee_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "reset_password",
       "description": "Reset the password for an employee's account. Generates a temporary password that must be changed within 24 hours. Will refuse to reset admin/privileged accounts (returns error).",
       "parameters": {

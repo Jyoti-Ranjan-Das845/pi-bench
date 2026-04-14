@@ -22,6 +22,7 @@ from pathlib import Path
 
 from pi_bench.agents import LiteLLMAgent
 from pi_bench.decision import CanonicalDecision, resolve
+from pi_bench.env import load_env
 from pi_bench.evaluator import evaluate
 from pi_bench.evaluator.llm_judge import clear_judge_cache
 from pi_bench.evaluator.scenario_validator import validate_scenario
@@ -181,6 +182,7 @@ def run_single_scenario(
 
 
 def main() -> None:
+    load_env()
     parser = argparse.ArgumentParser(description="Run pi-bench scenarios locally with LiteLLMAgent")
     parser.add_argument("--scenario", type=str, help="Path to a single scenario JSON file")
     parser.add_argument("--scenarios-dir", type=str, help="Directory of scenario files")

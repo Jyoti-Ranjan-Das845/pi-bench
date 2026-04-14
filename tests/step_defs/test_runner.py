@@ -25,7 +25,7 @@ def _stub_agent_completes():
             self.model_name = "stub-agent"
             self._call_count = 0
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             self._call_count = 0
             return {"messages": list(message_history or [])}
 
@@ -55,7 +55,7 @@ def _stub_agent_errors():
             self.seed = None
             self.model_name = "stub-agent-error"
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             return {}
 
         def generate(self, message, state):
@@ -81,7 +81,7 @@ def _stub_agent_with_actions(action_names):
             self.model_name = "stub-agent-actions"
             self._idx = 0
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             self._idx = 0
             return {"messages": list(message_history or [])}
 
@@ -116,7 +116,7 @@ def _stub_deterministic_agent():
             self.model_name = "stub-deterministic"
             self._call_count = 0
 
-        def init_state(self, system_messages, tools, message_history=None):
+        def init_state(self, benchmark_context, tools, message_history=None):
             self._call_count = 0
             return {"messages": list(message_history or [])}
 
@@ -580,3 +580,183 @@ def final_result_has_n(run_result, n):
 def task_ids_are(run_result, t1, t2):
     ids = sorted(s["task_id"] for s in run_result["simulations"])
     assert ids == sorted([t1, t2])
+
+
+# --- Direct regression tests for reproducibility contracts ---
+
+
+def test_run_domain_records_reproducibility_metadata(tmp_path):
+    from pi_bench import __version__
+    from pi_bench.runner import run_domain
+
+    domain = _make_mock_domain(_make_tasks(1))
+    agent = _stub_agent_completes()
+    user = _stub_user_completes()
+    save_path = tmp_path / "results.json"
+
+    result = run_domain(
+        domain=domain,
+        agent=agent,
+        user=user,
+        num_trials=1,
+        seed=123,
+        save_to=save_path,
+    )
+    sim = result["simulations"][0]
+
+    assert result["info"]["benchmark_version"] == __version__
+    assert result["info"]["seed"] == 123
+    assert result["info"]["base_seed"] == 123
+    assert sim["benchmark_version"] == __version__
+    assert sim["agent_model"] == "stub-agent"
+    assert sim["user_model"] == "stub-user"
+    assert sim["scenario_id"] == sim["task_id"] == "task_0"
+    assert sim["domain"] == "mock"
+    assert sim["termination_reason"]
+
+    saved = json.loads(save_path.read_text())
+    assert saved["info"]["benchmark_version"] == __version__
+    assert saved["info"]["seed"] == 123
+    assert "metrics" in saved
+    assert saved["simulations"][0]["benchmark_version"] == __version__
+
+
+def test_resume_uses_seed_when_checkpoint_has_seed_metadata(tmp_path):
+    from pi_bench.runner import run_domain
+    from pi_bench.runner.seeds import derive_seed
+
+    domain = _make_mock_domain(_make_tasks(1))
+    task_id = domain["tasks"][0]["id"]
+    saved_seed = derive_seed(123, task_id, 0)
+    save_path = tmp_path / "results.json"
+    save_path.write_text(json.dumps({
+        "info": {"seed": 123, "base_seed": 123},
+        "simulations": [{
+            "id": "saved",
+            "task_id": task_id,
+            "trial": 0,
+            "seed": saved_seed,
+            "termination_reason": "agent_stop",
+            "messages": [],
+            "reward_info": {"reward": 1.0},
+        }],
+    }))
+
+    same_seed = run_domain(
+        domain=domain,
+        agent=_stub_agent_completes(),
+        user=_stub_user_completes(),
+        num_trials=1,
+        seed=123,
+        resume_from=save_path,
+    )
+    different_seed = run_domain(
+        domain=domain,
+        agent=_stub_agent_completes(),
+        user=_stub_user_completes(),
+        num_trials=1,
+        seed=456,
+        resume_from=save_path,
+    )
+
+    assert same_seed["new_runs_count"] == 0
+    assert len(same_seed["simulations"]) == 1
+    assert different_seed["new_runs_count"] == 1
+    assert len(different_seed["simulations"]) == 2
+
+
+def test_run_domain_creates_fresh_environment_per_trial():
+    from domains.mock import get_environment
+    from pi_bench.runner import run_domain
+
+    created_envs = []
+
+    def get_fresh_environment(task):
+        env = get_environment(task)
+        env["db"]["created_index"] = len(created_envs)
+        created_envs.append(env)
+        return env
+
+    domain = {
+        "name": "mock",
+        "tasks": _make_tasks(1),
+        "get_environment": get_fresh_environment,
+    }
+    result = run_domain(
+        domain=domain,
+        agent=_stub_agent_completes(),
+        user=_stub_user_completes(),
+        num_trials=2,
+        seed=123,
+    )
+
+    env_ids = {id(sim["env"]) for sim in result["simulations"]}
+    assert len(created_envs) == 2
+    assert len(env_ids) == 2
+    assert [sim["env"]["db"]["created_index"] for sim in result["simulations"]] == [0, 1]
+
+
+def test_runner_output_feeds_metrics_directly():
+    from pi_bench.metrics import compute_metrics
+    from pi_bench.runner import run_domain
+
+    tasks = _make_tasks(1)
+    tasks[0]["leaderboard_primary"] = "Policy Activation"
+    tasks[0]["label"] = "ALLOW"
+    tasks[0]["domain"] = "mock"
+    domain = _make_mock_domain(tasks)
+
+    result = run_domain(
+        domain=domain,
+        agent=_stub_agent_completes(),
+        user=_stub_user_completes(),
+        num_trials=1,
+        seed=123,
+    )
+    sim = result["simulations"][0]
+    metrics = compute_metrics(result["simulations"])
+
+    assert sim["status"] == "completed"
+    assert sim["all_passed"] is True
+    assert "dimensions" in sim
+    assert sim["event_flags"] == {
+        "V_r": False,
+        "UR_r": False,
+        "OR_r": False,
+        "EA_r": False,
+        "AT_r": False,
+    }
+    assert result["metrics"]["event_flag_rates"]["violation_rate"] == 0.0
+    assert metrics.total_scenarios == 1
+    assert metrics.completed == 1
+    assert metrics.by_domain["mock"]["total"] == 1
+
+
+def test_run_domain_records_hard_exception_as_error_result():
+    from pi_bench.runner import run_domain
+
+    tasks = _make_tasks(1)
+
+    def broken_environment(task):
+        raise RuntimeError("boom")
+
+    domain = {
+        "name": "mock",
+        "tasks": tasks,
+        "get_environment": broken_environment,
+    }
+
+    result = run_domain(
+        domain=domain,
+        agent=_stub_agent_completes(),
+        user=_stub_user_completes(),
+        num_trials=1,
+        seed=123,
+    )
+
+    sim = result["simulations"][0]
+    assert sim["status"] == "error"
+    assert sim["termination_reason"] == "runtime_error"
+    assert sim["all_passed"] is False
+    assert "boom" in sim["error"]
+    assert result["metrics"]["errors"] == 1

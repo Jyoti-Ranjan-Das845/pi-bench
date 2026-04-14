@@ -18,8 +18,14 @@ def evaluate_communicate(communicate_info: list[str], trajectory: list[dict]) ->
     Case-insensitive substring matching. Commas stripped before comparison.
     Returns 1.0 if ALL required strings found, 0.0 if any missing.
     """
+    results = evaluate_communicate_rich(communicate_info, trajectory)
+    return 1.0 if all(r["passed"] for r in results) else 0.0
+
+
+def evaluate_communicate_rich(communicate_info: list[str], trajectory: list[dict]) -> list[dict]:
+    """Return one explainable result per required communication string."""
     if not communicate_info:
-        return 1.0
+        return []
 
     agent_text = ""
     for msg in trajectory:
@@ -27,12 +33,23 @@ def evaluate_communicate(communicate_info: list[str], trajectory: list[dict]) ->
             agent_text += " " + extract_message_content(msg)
 
     agent_text_clean = agent_text.replace(",", "").lower()
+    results = []
 
-    for info in communicate_info:
+    for idx, info in enumerate(communicate_info):
         info_clean = info.replace(",", "").lower()
-        if info_clean not in agent_text_clean:
+        passed = info_clean in agent_text_clean
+        if not passed:
             logger.info("COMMUNICATE: missing required string: '%s'", info[:80])
-            return 0.0
+        results.append({
+            "outcome_id": f"COMMUNICATE_{idx}",
+            "type": "communicate",
+            "passed": passed,
+            "detail": (
+                f"required text found: {info[:80]!r}"
+                if passed
+                else f"missing required text: {info[:80]!r}"
+            ),
+        })
 
-    logger.debug("COMMUNICATE: all %d required strings found", len(communicate_info))
-    return 1.0
+    logger.debug("COMMUNICATE: %d/%d required strings found", sum(r["passed"] for r in results), len(results))
+    return results

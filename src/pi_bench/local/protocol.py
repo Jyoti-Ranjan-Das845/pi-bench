@@ -16,7 +16,7 @@ class AgentProtocol(Protocol):
 
     def init_state(
         self,
-        system_messages: list[dict],
+        benchmark_context: list[dict],
         tools: list[dict],
         message_history: list[dict] | None = None,
     ) -> dict: ...

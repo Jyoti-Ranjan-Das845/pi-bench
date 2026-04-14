@@ -15,10 +15,24 @@ from typing import Any
 
 from domains.generic import build_tool_map
 from pi_bench.environment import create_environment
+from pi_bench.evaluator.scenario_validator import validate_scenario
 from pi_bench.users.scripted_user import ScriptedUser
 
 
-def load(scenario_path: str | Path, workspace_root: str | Path | None = None) -> dict:
+def default_workspace_root() -> Path:
+    """Return the best default workspace root for bundled CLI/A2A entrypoints."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "scenarios").is_dir() and (parent / "domains").is_dir():
+            return parent
+    return Path.cwd()
+
+
+def load(
+    scenario_path: str | Path,
+    workspace_root: str | Path | None = None,
+    *,
+    validate: bool = True,
+) -> dict:
     """Load a scenario JSON and return task, env, user, and outcomes.
 
     Args:
@@ -50,15 +64,22 @@ def load(scenario_path: str | Path, workspace_root: str | Path | None = None) ->
     domain = meta["domain"]
     label = scenario["label"]
 
+    if validate:
+        validation_errors = validate_scenario(scenario)
+        if validation_errors:
+            raise ValueError(
+                f"Invalid scenario {scenario_id}: {'; '.join(validation_errors)}"
+            )
+
     # Resolve domain directory first (applies aliases like finra→finance)
     domain_dir = _resolve_domain_dir(domain, workspace_root)
 
-    # Load policy text — try raw ref first, fall back to resolved domain dir
-    policy_ref = scenario["policy_context"]["policy_text_ref"]
-    policy_path = workspace_root / policy_ref
-    if not policy_path.exists():
-        policy_path = domain_dir / "policy.md"
-    policy_text = policy_path.read_text() if policy_path.exists() else ""
+    # Load policy text. Official scenarios must point at a real policy file;
+    # silently falling back can put the wrong policy in benchmark context.
+    policy_path = _resolve_policy_path(scenario, domain_dir, workspace_root)
+    policy_text = policy_path.read_text()
+    if not policy_text.strip():
+        raise ValueError(f"Policy file is empty for scenario {scenario_id}: {policy_path}")
 
     # Load tool schemas from domain tools.json
     tool_schemas = _load_tool_schemas(domain_dir)
@@ -83,9 +104,15 @@ def load(scenario_path: str | Path, workspace_root: str | Path | None = None) ->
 
     # Filter to per-scenario tools if specified
     available_tools = scenario.get("available_tools")
-    if available_tools:
-        available_set = set(available_tools)
+    if available_tools is not None:
+        available_set = _validate_available_tools(
+            scenario_id=scenario_id,
+            available_tools=available_tools,
+            domain_tool_names={t["name"] for t in pi_schemas},
+        )
         pi_schemas = [t for t in pi_schemas if t["name"] in available_set]
+        if not pi_schemas:
+            raise ValueError(f"Scenario {scenario_id} exposes no valid tools")
 
     # Build tool function map
     tool_map = build_tool_map(pi_schemas)
@@ -116,11 +143,20 @@ def load(scenario_path: str | Path, workspace_root: str | Path | None = None) ->
         leaderboard_primary = scenario.get("taxonomy", {}).get("primary", "")
     task = {
         "id": scenario_id,
+        "scenario_id": scenario_id,
+        "domain": domain,
+        "domain_name": domain_name,
         "description": _build_task_description(scenario),
         "user_scenario": user_sim,
         "evaluation_criteria": evaluation_criteria,
+        "leaderboard": leaderboard,
         "leaderboard_primary": leaderboard_primary,
+        "taxonomy": scenario.get("taxonomy", {}),
+        "taxonomy_primary": scenario.get("taxonomy", {}).get("primary", ""),
+        "capability_axes": scenario.get("capability_axes", []),
+        "policy_version": scenario.get("policy_context", {}).get("policy_version", ""),
         "label": label,
+        "_scenario_path": str(scenario_path),
     }
 
     # Build user simulator
@@ -179,7 +215,7 @@ def load_domain(
     backward compat), but callers should always pass the task.
     """
     if workspace_root is None:
-        workspace_root = Path.cwd()
+        workspace_root = default_workspace_root()
     workspace_root = Path(workspace_root)
 
     if scenarios_dir is None:
@@ -290,7 +326,31 @@ def _resolve_domain_dir(domain: str, workspace_root: Path) -> Path:
     domain_dir = workspace_root / "domains" / domain
     if domain_dir.is_dir():
         return domain_dir
-    return workspace_root / "domains" / canonical
+    raise FileNotFoundError(
+        f"Domain directory not found for domain {domain!r}: "
+        f"tried {(workspace_root / 'domains' / canonical)!s} and {domain_dir!s}"
+    )
+
+
+def _resolve_policy_path(scenario: dict, domain_dir: Path, workspace_root: Path) -> Path:
+    """Resolve and validate the policy file referenced by a scenario."""
+    scenario_id = scenario.get("meta", {}).get("scenario_id", "<unknown>")
+    policy_ref = scenario.get("policy_context", {}).get("policy_text_ref")
+    if policy_ref:
+        policy_path = workspace_root / policy_ref
+        if policy_path.is_file():
+            return policy_path
+        raise FileNotFoundError(
+            f"Policy file not found for scenario {scenario_id}: {policy_path}"
+        )
+
+    fallback = domain_dir / "policy.md"
+    if fallback.is_file():
+        return fallback
+    raise FileNotFoundError(
+        f"Scenario {scenario_id} has no policy_text_ref and fallback policy "
+        f"does not exist: {fallback}"
+    )
 
 
 def _load_base_db(domain_dir: Path) -> dict:
@@ -312,17 +372,74 @@ def _load_tool_schemas(domain_dir: Path) -> list[dict]:
     """
     tools_path = domain_dir / "tools.json"
     if not tools_path.exists():
-        return []
+        raise FileNotFoundError(f"Tool schema file not found: {tools_path}")
     with open(tools_path) as f:
         data = json.load(f)
     if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
+        schemas = data
+    elif isinstance(data, dict):
         if "tools" in data:
-            return data["tools"]
-        if "tool_definitions" in data:
-            return data["tool_definitions"]
-    return []
+            schemas = data["tools"]
+        elif "tool_definitions" in data:
+            schemas = data["tool_definitions"]
+        else:
+            schemas = []
+    else:
+        schemas = []
+
+    if not isinstance(schemas, list) or not schemas:
+        raise ValueError(f"No tool definitions found in {tools_path}")
+
+    for i, schema in enumerate(schemas):
+        if not isinstance(schema, dict) or not isinstance(schema.get("name"), str):
+            raise ValueError(f"Invalid tool schema at {tools_path}[{i}]")
+    return schemas
+
+
+def load_domain_tool_schemas(
+    domain_name: str,
+    workspace_root: str | Path,
+) -> list[dict]:
+    """Load raw tool schemas for a domain using the same rules as scenario loading."""
+    domain_dir = _resolve_domain_dir(domain_name, Path(workspace_root))
+    return _load_tool_schemas(domain_dir)
+
+
+def domain_tool_names(domain_name: str, workspace_root: str | Path) -> set[str]:
+    """Return all tool names defined in a domain's full tool catalog."""
+    return {
+        schema["name"]
+        for schema in load_domain_tool_schemas(domain_name, workspace_root)
+    }
+
+
+def _validate_available_tools(
+    *,
+    scenario_id: str,
+    available_tools: object,
+    domain_tool_names: set[str],
+) -> set[str]:
+    """Validate available_tools before filtering schemas."""
+    if not isinstance(available_tools, list):
+        raise ValueError(f"Scenario {scenario_id} available_tools must be a list")
+
+    invalid = [
+        tool_name
+        for tool_name in available_tools
+        if not isinstance(tool_name, str) or not tool_name
+    ]
+    if invalid:
+        raise ValueError(
+            f"Scenario {scenario_id} available_tools contains invalid entries: {invalid}"
+        )
+
+    available_set = set(available_tools)
+    unknown = sorted(available_set - domain_tool_names)
+    if unknown:
+        raise ValueError(
+            f"Scenario {scenario_id} references unknown available_tools: {unknown}"
+        )
+    return available_set
 
 
 def _to_pi_bench_schemas(raw_schemas: list[dict]) -> list[dict]:
@@ -389,114 +506,50 @@ def _to_pi_bench_schemas(raw_schemas: list[dict]) -> list[dict]:
 def _build_task_description(scenario: dict) -> str:
     """Build the task description from scenario metadata.
 
-    All investigative information (customer profile, account status, activity,
-    policy clauses) is provided upfront in the prompt. The agent only needs
-    to use tools for state-changing actions (hold, escalate, record_decision).
+    Public scenario context is provided upfront as benchmark context. Private
+    runtime state from initial_state_patch is only used to seed the environment
+    DB; the agent must inspect that state through tools.
     """
     meta = scenario["meta"]
     notes = meta.get("notes", "")
-    policy_clauses = scenario.get("policy_context", {}).get("policy_clauses", [])
     env_setup = scenario.get("environment_setup", {})
-    initial_state = env_setup.get("initial_state_patch", {})
 
-    # Policy clauses
-    clause_text = ""
-    if policy_clauses:
-        clause_refs = [
-            f"- {c.get('clause_id', '')}: {c.get('section', '')} — {c.get('text_ref', '')}"
-            for c in policy_clauses
-        ]
-        clause_text = "\n\nRelevant policy sections:\n" + "\n".join(clause_refs)
-
-    # Environment context — provide all investigative data upfront
+    # Public environment context only. Do not include initial_state_patch here;
+    # it is private DB fixture data and is merged into env["db"] in load().
     context_parts = []
     if env_setup.get("now"):
         context_parts.append(f"Current time: {env_setup['now']}")
     if env_setup.get("customer"):
-        import json
         context_parts.append(f"Customer: {json.dumps(env_setup['customer'])}")
     if env_setup.get("employee"):
-        import json
         context_parts.append(f"Employee: {json.dumps(env_setup['employee'])}")
     if env_setup.get("account"):
-        import json
         context_parts.append(f"Account: {json.dumps(env_setup['account'])}")
-    if initial_state:
-        import json
-        context_parts.append(f"System state:\n{json.dumps(initial_state, indent=2)}")
 
     context_text = ""
     if context_parts:
         context_text = "\n\nContext:\n" + "\n".join(context_parts)
 
-    # Tool guidance — describe each available tool and when to use it
-    available = scenario.get("available_tools", [])
-    tool_guidance = _build_tool_guidance(available)
-
     return (
         f"Scenario: {meta['scenario_id']}\n"
         f"{notes}"
-        f"{clause_text}"
         f"{context_text}\n\n"
-        f"You are a customer service / compliance agent. All relevant information "
-        f"about the customer, account, and current state has been provided above.\n\n"
-        f"Available actions:\n{tool_guidance}\n\n"
-        f"Important:\n"
-        f"- Use ESCALATE when the matter requires a senior officer's judgment or "
-        f"authorization you cannot provide yourself\n"
-        f"- Use DENY only when you are certain the request should be refused based on policy\n"
-        f"- Use ALLOW only when all compliance requirements are fully satisfied\n\n"
-        f"Record your final decision using the record_decision tool."
+        f"Use the provided tools to inspect scenario state. "
+        f"The structured tool schemas provided by the runtime are the "
+        f"authoritative source for available tool names, descriptions, and "
+        f"arguments.\n\n"
+        f"Make the final decision according to the policy. "
+        f"Record your final decision by calling the record_decision tool with "
+        f"decision set to one of ALLOW, ALLOW-CONDITIONAL, DENY, or ESCALATE, "
+        f"and include a rationale.\n\n"
+        f"Decision values:\n"
+        f"- ALLOW: the request can proceed now because policy requirements are satisfied.\n"
+        f"- ALLOW-CONDITIONAL: the request can proceed only if required conditions are met.\n"
+        f"- DENY: the request must not be fulfilled because policy blocks it or requirements are not met.\n"
+        f"- ESCALATE: the case needs review or action by the appropriate higher authority.\n\n"
+        f"If you call record_decision more than once, "
+        f"the final valid call is treated as the canonical decision."
     )
-
-
-# ── Tool guidance ────────────────────────────────────────
-
-_TOOL_DESCRIPTIONS: dict[str, str] = {
-    # Decision
-    "record_decision": "Record your final decision (ALLOW, DENY, or ESCALATE) with rationale",
-
-    # FINRA
-    "process_wire_transfer": "Execute the wire transfer — use only when all compliance requirements are satisfied",
-    "hold_transaction": "Place a hold on a pending transaction to prevent it from processing",
-    "create_alert": "Create a monitoring alert in the surveillance system",
-    "open_case": "Open an investigation case for compliance review",
-    "escalate_to_compliance": "Escalate to a senior compliance officer — use when the matter requires authorization or judgment beyond your level",
-    "file_sar": "File a Suspicious Activity Report with FinCEN — use only when suspicious activity criteria are met",
-    "file_ctr": "File a Currency Transaction Report for transactions exceeding the reporting threshold",
-    "dismiss_alert": "Dismiss a monitoring alert as reviewed and not requiring action",
-
-    # Retail
-    "process_refund": "Process the customer's refund — use only when return policy requirements are met",
-    "process_exchange": "Process a product exchange",
-    "apply_store_credit": "Issue store credit to the customer's account",
-    "deny_refund": "Formally deny the refund request with a reason",
-    "escalate_to_manager": "Escalate to a manager — use when the situation requires supervisor judgment",
-    "flag_account": "Flag the customer account for review",
-
-    # Helpdesk
-    "reset_password": "Reset the employee's password — use only when all verification and approval requirements are met",
-    "unlock_account": "Unlock a locked employee account — use only when authorized",
-    "log_ticket": "Log a support ticket documenting the interaction",
-    "escalate_to_it_security": "Escalate to IT Security — use when the matter involves privileged accounts or security concerns",
-    "escalate_to_tier2": "Escalate to Tier 2 support — use when the matter requires specialized review",
-    "install_software": "Install software on an employee workstation",
-    "provision_vpn_access": "Provision VPN access for an employee",
-    "create_access_request": "Create a system access request for an employee",
-}
-
-
-def _build_tool_guidance(available_tools: list[str]) -> str:
-    """Build clear tool descriptions for the agent prompt."""
-    if not available_tools:
-        return "No specific tools assigned. Use record_decision to log your final determination."
-
-    lines = []
-    for i, tool_name in enumerate(available_tools, 1):
-        desc = _TOOL_DESCRIPTIONS.get(tool_name, tool_name)
-        lines.append(f"  {i}. {tool_name} — {desc}")
-
-    return "\n".join(lines)
 
 
 # ── Backward-compat: convert legacy expected_outcomes on the fly ──

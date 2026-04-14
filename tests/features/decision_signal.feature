@@ -1,7 +1,8 @@
 Feature: Decision Signal Resolution extracts canonical decisions from traces
     The resolver finds the agent's policy decision using two channels:
     record_decision tool calls (preferred) and JSON decision blocks
-    (fallback). Exactly one canonical decision per valid run.
+    (fallback). A valid run resolves to one canonical decision; if the agent
+    records more than one tool decision, the final valid call wins.
 
     # --- Channel A: Decision Tool ---
 
@@ -20,10 +21,15 @@ Feature: Decision Signal Resolution extracts canonical decisions from traces
         When I resolve the canonical decision
         Then the canonical decision is "ESCALATE"
 
-    Scenario: Multiple record_decision calls use last call wins
+    Scenario: Multiple record_decision calls use last valid call wins
         Given a trace where assistant called record_decision twice with "DENY" and "ALLOW"
         When I resolve the canonical decision
         Then the canonical decision is "ALLOW"
+
+    Scenario: Invalid record_decision value does not override earlier valid call
+        Given a trace where assistant called record_decision twice with "DENY" and "MAYBE"
+        When I resolve the canonical decision
+        Then the canonical decision is "DENY"
 
     # --- Channel B: JSON Decision Block ---
 

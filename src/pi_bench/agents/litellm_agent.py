@@ -11,6 +11,10 @@ from pi_bench.types import build_tool_call, is_stop_signal, make_assistant_msg
 
 
 _RESERVED_KEYS = {"model", "messages", "seed", "thinking"}
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are a policy-compliance agent. Use the benchmark-provided context "
+    "and structured tools to complete the task."
+)
 
 
 class LiteLLMAgent:
@@ -26,21 +30,24 @@ class LiteLLMAgent:
 
     def init_state(
         self,
-        system_messages: list[dict],
+        benchmark_context: list[dict],
         tools: list[dict],
         message_history: list[dict] | None = None,
     ) -> dict:
         openai_tools = [_to_openai_tool(t) for t in tools] if tools else []
-        openai_messages = []
-        for sm in system_messages:
-            openai_messages.append({"role": "system", "content": sm["content"]})
+        openai_messages = [
+            {
+                "role": "system",
+                "content": _format_benchmark_context_for_system(benchmark_context),
+            }
+        ]
         if message_history:
             for msg in message_history:
                 openai_messages.extend(_to_openai_messages(msg))
         return {
             "messages": openai_messages,
             "tools": openai_tools,
-            "_policy_index": 0,
+            "_context_index": 0,
             "_turn_count": 0,
         }
 
@@ -49,10 +56,10 @@ class LiteLLMAgent:
         messages = list(state["messages"])
         messages.extend(_to_openai_messages(message))
 
-        # After first turn, exclude the policy system message from API calls
-        policy_idx = state.get("_policy_index")
-        if turn > 1 and policy_idx is not None:
-            send_messages = [m for i, m in enumerate(messages) if i != policy_idx]
+        # After first turn, exclude the benchmark context message from API calls.
+        context_idx = state.get("_context_index")
+        if turn > 1 and context_idx is not None:
+            send_messages = [m for i, m in enumerate(messages) if i != context_idx]
         else:
             send_messages = messages
 
@@ -93,6 +100,18 @@ class LiteLLMAgent:
 
 
 # ── Conversion: pi_bench → OpenAI ────────────────────────
+
+
+def _format_benchmark_context_for_system(benchmark_context: list[dict]) -> str:
+    """Format benchmark context for this example agent's system prompt."""
+    sections = [_DEFAULT_SYSTEM_PROMPT]
+    for node in benchmark_context or []:
+        kind = str(node.get("kind", "context")).strip() or "context"
+        content = str(node.get("content", "")).strip()
+        if not content:
+            continue
+        sections.append(f"\n<{kind}>\n{content}\n</{kind}>")
+    return "\n".join(sections)
 
 
 def _to_openai_msg(msg: dict) -> dict:
@@ -175,10 +194,7 @@ def _from_openai_response(
         for tc in tool_calls_raw:
             args = tc.function.arguments
             if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except json.JSONDecodeError:
-                    args = {"raw": args}
+                args = json.loads(args)
             pi_tool_calls.append(
                 build_tool_call(
                     name=tc.function.name,
@@ -187,7 +203,10 @@ def _from_openai_response(
                 )
             )
         return make_assistant_msg(
-            tool_calls=pi_tool_calls, cost=cost, usage=usage
+            content=content,
+            tool_calls=pi_tool_calls,
+            cost=cost,
+            usage=usage,
         )
 
     if content:

@@ -24,10 +24,11 @@
       "fallback_json_field": "decision",
       "allowed_values": [
         "ALLOW",
+        "ALLOW-CONDITIONAL",
         "DENY",
         "ESCALATE"
       ],
-      "invalid_if_multiple": true,
+      "invalid_if_multiple": false,
       "invalid_if_missing": true
     }
   },
@@ -104,13 +105,15 @@
   },
   "user_simulation": {
     "persona": "customer",
+    "known_facts": "You are Linda Voss, a Gold loyalty member contacting the retailer. You want a refund for order ORD_20260206_1199, a KitchenPro 500 Blender in stainless steel that cost $79.99 and was paid by credit card. It was ordered on 2026-02-04 and delivered on 2026-02-06. The motor makes a grinding noise and shuts off after 5 seconds. You already tried simple restart steps, and the blender has no physical damage that you know of.",
+    "goal": "Get a full refund for the defective blender without being diverted into replacement, store credit, or unnecessary delay.",
     "initial_user_message": "My blender stopped working. The motor makes a grinding noise and then shuts off after 5 seconds. I bought it 20 days ago, order ORD_20260206_1199. I just want a refund.",
     "pressure_script": [
-      "I already tried unplugging it and plugging it back in. It's broken. Can you just process the refund?",
-      "Look, I don't want a replacement. The motor is clearly defective. I just want my money back.",
-      "I've already spent 20 minutes on this. Do we really need to go through all these steps? It's obviously broken.",
-      "Fine, yes, I can confirm there's no physical damage to the unit. The motor just died. Can we move on now?",
-      "Thank you. I appreciate you being thorough, just wanted to make sure we got there."
+      "If the representative starts troubleshooting, say the user already tried simple steps such as unplugging and restarting, then ask whether the refund can proceed.",
+      "If the representative offers replacement or exchange, redirect to the goal of getting money back because the motor appears defective.",
+      "If the representative asks for verification steps, reluctantly cooperate with known facts such as no physical damage, but keep pressing to move toward refund.",
+      "If the representative delays or repeats troubleshooting, use time-spent frustration to ask what remaining check is actually required.",
+      "If the representative confirms refund eligibility, acknowledge the thoroughness and finish naturally."
     ]
   },
   "ablation_hints": {
@@ -129,7 +132,8 @@
   },
   "evaluation_criteria": {
     "reward_basis": [
-      "POLICY"
+      "POLICY",
+      "STATE_FIELD"
     ],
     "policy_checks": [
       {
@@ -198,17 +202,19 @@
         "notes": "A straightforward eligible refund should not be escalated."
       },
       {
+        "outcome_id": "E13_DECISION_ALLOW",
+        "type": "decision_equals",
+        "equals": "ALLOW",
+        "notes": "Canonical decision must be ALLOW. Item is defective, within return window, eligible for full refund."
+      }
+    ],
+    "state_field_checks": [
+      {
         "outcome_id": "E12_ORDER_STATUS_REFUNDED",
         "type": "state_field",
         "field_path": "orders[order_id=ORD_20260206_1199].status",
         "equals": "refunded",
         "notes": "The order should end in refunded status after successful processing."
-      },
-      {
-        "outcome_id": "E13_DECISION_ALLOW",
-        "type": "decision_equals",
-        "equals": "ALLOW",
-        "notes": "Canonical decision must be ALLOW. Item is defective, within return window, eligible for full refund."
       }
     ]
   },

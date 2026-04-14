@@ -186,8 +186,8 @@ def _build_scenario(
             "canonical_decision_resolution": {
                 "preferred_tool": "record_decision",
                 "fallback_json_field": "decision",
-                "allowed_values": ["ALLOW", "DENY", "ESCALATE"],
-                "invalid_if_multiple": True,
+                "allowed_values": ["ALLOW", "ALLOW-CONDITIONAL", "DENY", "ESCALATE"],
+                "invalid_if_multiple": False,
                 "invalid_if_missing": True,
             }
         },

@@ -32,7 +32,9 @@ from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 
+from pi_bench import __version__
 from pi_bench.a2a.executor import PIBenchExecutor
+from pi_bench.scenario_loader import default_workspace_root
 
 # The green server is aware of the bootstrap extension
 # (urn:pi-bench:policy-bootstrap:v1) but does not need to declare it in its
@@ -41,7 +43,7 @@ from pi_bench.a2a.executor import PIBenchExecutor
 
 logger = logging.getLogger(__name__)
 
-SCENARIOS_DIR = Path("scenarios")
+SCENARIOS_DIR = default_workspace_root() / "scenarios"
 
 
 def build_agent_card(host: str, port: int, card_url: str | None = None) -> AgentCard:
@@ -76,7 +78,7 @@ def build_agent_card(host: str, port: int, card_url: str | None = None) -> Agent
             "(FINRA AML), retail customer service, and IT helpdesk domains."
         ),
         url=card_url or f"http://{host}:{port}/",
-        version="0.1.0",
+        version=__version__,
         default_input_modes=["application/json"],
         default_output_modes=["application/json"],
         capabilities=AgentCapabilities(),
@@ -93,17 +95,22 @@ async def list_scenarios(request: Request) -> JSONResponse:
     """List available scenario files across all domains."""
     from pi_bench.scenario_loader import discover_scenarios
 
-    scenario_files = discover_scenarios(SCENARIOS_DIR)
+    scenarios_dir = Path(getattr(request.app.state, "scenarios_dir", SCENARIOS_DIR))
+    scenario_files = discover_scenarios(scenarios_dir)
     scenarios = []
     for path in scenario_files:
         try:
             data = json.loads(path.read_text())
             meta = data.get("meta", {})
+            try:
+                file_name = str(path.relative_to(scenarios_dir))
+            except ValueError:
+                file_name = str(path)
             scenarios.append({
                 "scenario_id": meta.get("scenario_id", path.stem),
                 "domain": meta.get("domain", "unknown"),
                 "label": data.get("label", "?"),
-                "file": str(path.relative_to(SCENARIOS_DIR)),
+                "file": file_name,
             })
         except (json.JSONDecodeError, OSError, ValueError) as exc:
             logger.warning("Failed to read scenario %s: %s", path, exc)
@@ -130,12 +137,14 @@ def create_app(
     host: str = "0.0.0.0",
     port: int = 9009,
     card_url: str | None = None,
+    scenarios_dir: str | Path | None = None,
+    concurrency: int = 1,
 ) -> Starlette:
     """Create the full Starlette application with A2A + health routes."""
     agent_card = build_agent_card(host, port, card_url=card_url)
 
     request_handler = DefaultRequestHandler(
-        agent_executor=PIBenchExecutor(),
+        agent_executor=PIBenchExecutor(concurrency=concurrency),
         task_store=InMemoryTaskStore(),
     )
 
@@ -144,7 +153,28 @@ def create_app(
         http_handler=request_handler,
     )
 
-    app = a2a_app.build()
+    app = a2a_app.build(
+        agent_card_url="/.well-known/agent.json",
+        rpc_url="/a2a/message/send",
+    )
+    app.routes.append(
+        Route(
+            "/",
+            a2a_app._handle_requests,
+            methods=["POST"],
+            name="a2a_handler_legacy",
+        )
+    )
+    app.routes.append(
+        Route(
+            "/.well-known/agent-card.json",
+            a2a_app._handle_get_agent_card,
+            methods=["GET"],
+            name="agent_card_legacy",
+        )
+    )
+    app.state.scenarios_dir = Path(scenarios_dir) if scenarios_dir else SCENARIOS_DIR
+    app.state.concurrency = max(1, int(concurrency))
 
     app.routes.append(Route("/health", health))
     app.routes.append(Route("/scenarios", list_scenarios))
@@ -155,6 +185,9 @@ def create_app(
 
 def main() -> None:
     """Entry point for pi-bench-green CLI."""
+    from pi_bench.env import load_env
+
+    load_env()
     parser = argparse.ArgumentParser(
         description="PI-Bench A2A Green Agent Server"
     )
@@ -170,6 +203,14 @@ def main() -> None:
         "--card-url", default=None,
         help="Public URL for agent card (for AgentBeats Docker)",
     )
+    parser.add_argument(
+        "--scenarios-dir", default=str(SCENARIOS_DIR),
+        help="Scenarios directory to expose and assess",
+    )
+    parser.add_argument(
+        "--concurrency", type=int, default=1,
+        help="Maximum parallel A2A scenario workers (default: 1)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -178,10 +219,17 @@ def main() -> None:
     )
 
     from pi_bench.scenario_loader import discover_scenarios
-    scenario_count = len(discover_scenarios(SCENARIOS_DIR))
-    logger.info("Found %d scenario files in %s", scenario_count, SCENARIOS_DIR)
+    scenarios_dir = Path(args.scenarios_dir)
+    scenario_count = len(discover_scenarios(scenarios_dir))
+    logger.info("Found %d scenario files in %s", scenario_count, scenarios_dir)
 
-    app = create_app(host=args.host, port=args.port, card_url=args.card_url)
+    app = create_app(
+        host=args.host,
+        port=args.port,
+        card_url=args.card_url,
+        scenarios_dir=scenarios_dir,
+        concurrency=args.concurrency,
+    )
     uvicorn.run(app, host=args.host, port=args.port)
 
 

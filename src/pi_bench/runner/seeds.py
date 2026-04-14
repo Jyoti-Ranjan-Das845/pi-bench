@@ -33,11 +33,24 @@ def build_work_queue(
     num_trials: int,
     base_seed: int,
     completed: set[tuple],
+    include_seed_in_key: bool = False,
 ) -> list[tuple[dict, int, int]]:
     """Generate (task, trial, seed) tuples, excluding completed."""
     all_work = derive_trial_seeds(base_seed, tasks, num_trials)
     return [
         (task, trial, seed)
         for task, trial, seed in all_work
-        if (task["id"], trial) not in completed
+        if _work_key(task, trial, seed, include_seed_in_key) not in completed
     ]
+
+
+def _work_key(
+    task: dict,
+    trial: int,
+    seed: int,
+    include_seed: bool,
+) -> tuple:
+    """Return the resume key for a planned work item."""
+    if include_seed:
+        return (task["id"], trial, seed)
+    return (task["id"], trial)

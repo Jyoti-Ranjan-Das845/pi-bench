@@ -24,6 +24,9 @@ _DIMENSION_MAP = {
     "tool_called_min_times": "outcomes",
     "tool_before_tool": "ordering",
     "tool_before_tool_any": "ordering",
+    "communicate": "communication",
+    "db_replay": "state",
+    "env_assertion": "state",
     "state_field": "state",
     "message_not_contains": "permissibility",
     "escalation_attempted": "outcomes",
@@ -38,10 +41,19 @@ _DIMENSION_LABELS = {
     "outcomes": "Required Outcomes",
     "ordering": "Temporal Constraints",
     "state": "State Correctness",
+    "communication": "Communication",
     "semantic": "Semantic Quality",
 }
 
-_DIMENSION_ORDER = ["decision", "permissibility", "outcomes", "ordering", "state", "semantic"]
+_DIMENSION_ORDER = [
+    "decision",
+    "permissibility",
+    "outcomes",
+    "ordering",
+    "state",
+    "communication",
+    "semantic",
+]
 
 
 def classify_dimensions(outcome_results: list[dict]) -> dict[str, dict[str, Any]]:

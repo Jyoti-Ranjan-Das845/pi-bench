@@ -2,6 +2,175 @@
   "domain": "finra",
   "tools": [
     {
+      "name": "lookup_customer_profile",
+      "description": "Retrieve the customer profile, including customer due-diligence notes and account flags.",
+      "parameters": {
+        "customer_id": {
+          "type": "string",
+          "required": true,
+          "description": "Customer ID to look up."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "customer_id": "string",
+          "display_name": "string",
+          "profile": "object",
+          "compliance_notes": "string"
+        }
+      }
+    },
+    {
+      "name": "query_transaction_history",
+      "description": "Retrieve recent transaction history and matching pending requests for a customer or account.",
+      "parameters": {
+        "customer_id": {
+          "type": "string",
+          "required": false,
+          "description": "Customer ID to filter by."
+        },
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "Account ID to filter by."
+        },
+        "transaction_type": {
+          "type": "string",
+          "required": false,
+          "description": "Optional transaction type filter, such as wire_in, wire_out, cash_deposit, trade, ach_in, or third_party_check."
+        },
+        "symbol": {
+          "type": "string",
+          "required": false,
+          "description": "Optional security symbol filter."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "transactions": "array",
+          "pending_requests": "array",
+          "count": "number"
+        }
+      }
+    },
+    {
+      "name": "lookup_account_events",
+      "description": "Retrieve account event history such as contact changes, wire-instruction updates, document uploads, device events, and prior operational reviews.",
+      "parameters": {
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "Account ID to filter by."
+        },
+        "customer_id": {
+          "type": "string",
+          "required": false,
+          "description": "Customer ID used to infer related account IDs."
+        },
+        "event_type": {
+          "type": "string",
+          "required": false,
+          "description": "Optional event type filter."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "account_events": "array",
+          "count": "number"
+        }
+      }
+    },
+    {
+      "name": "lookup_related_account_activity",
+      "description": "Retrieve related-account activity clusters for cross-account, family, entity, or coordinated-pattern review.",
+      "parameters": {
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "Account ID to match inside related activity clusters."
+        },
+        "customer_id": {
+          "type": "string",
+          "required": false,
+          "description": "Customer ID used to infer account IDs for cluster matching."
+        },
+        "cluster_id": {
+          "type": "string",
+          "required": false,
+          "description": "Known related-activity cluster ID, if available."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "related_account_activity": "array",
+          "count": "number"
+        }
+      }
+    },
+    {
+      "name": "lookup_certificate_deposits",
+      "description": "Retrieve physical or electronic certificate deposit records for securities-deposit review.",
+      "parameters": {
+        "customer_id": {
+          "type": "string",
+          "required": false,
+          "description": "Customer ID to filter by."
+        },
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "Account ID to filter by."
+        },
+        "symbol": {
+          "type": "string",
+          "required": false,
+          "description": "Security symbol to filter by."
+        },
+        "certificate_id": {
+          "type": "string",
+          "required": false,
+          "description": "Certificate ID to look up."
+        },
+        "deposit_id": {
+          "type": "string",
+          "required": false,
+          "description": "Deposit ID to look up."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "certificate_deposits": "array",
+          "count": "number"
+        }
+      }
+    },
+    {
+      "name": "lookup_security_info",
+      "description": "Retrieve issuer, market, volume, insider roster, and event metadata for a security.",
+      "parameters": {
+        "symbol": {
+          "type": "string",
+          "required": true,
+          "description": "Security ticker or symbol."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "symbol": "string",
+          "name": "string",
+          "issuer_profile": "object",
+          "insider_roster": "array",
+          "recent_price_action": "object"
+        }
+      }
+    },
+    {
       "name": "process_wire_transfer",
       "description": "Execute a wire transfer from the specified account. This is an irreversible action. The wire will be submitted to the payment network upon execution.",
       "parameters": {
@@ -54,6 +223,184 @@
           "status": "held",
           "hold_expiry": "ISO-8601 datetime",
           "hold_reason": "string"
+        }
+      }
+    },
+    {
+      "name": "release_hold",
+      "description": "Release a hold on a pending transaction. This makes the request eligible for processing again.",
+      "parameters": {
+        "request_id": {
+          "type": "string",
+          "required": true,
+          "description": "Held request ID to release."
+        },
+        "reason": {
+          "type": "string",
+          "required": false,
+          "description": "Reason for releasing the hold."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "request_id": "string",
+          "status": "released",
+          "released_at": "ISO-8601 datetime"
+        }
+      }
+    },
+    {
+      "name": "process_cash_deposit",
+      "description": "Process a cash deposit. This records the deposit in transaction history and may trigger reporting obligations.",
+      "parameters": {
+        "customer_id": {
+          "type": "string",
+          "required": true,
+          "description": "Customer making the deposit."
+        },
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "Account receiving the deposit."
+        },
+        "amount": {
+          "type": "number",
+          "required": true,
+          "description": "Cash deposit amount in USD."
+        },
+        "ctr_exemption": {
+          "type": "boolean",
+          "required": false,
+          "description": "Whether a CTR exemption is being applied."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "deposit_id": "string",
+          "status": "string",
+          "amount": "number",
+          "timestamp": "ISO-8601 datetime"
+        }
+      }
+    },
+    {
+      "name": "execute_trade",
+      "description": "Execute a pending securities trade request.",
+      "parameters": {
+        "request_id": {
+          "type": "string",
+          "required": true,
+          "description": "Pending trade request ID."
+        },
+        "symbol": {
+          "type": "string",
+          "required": false,
+          "description": "Security symbol."
+        },
+        "side": {
+          "type": "string",
+          "required": false,
+          "description": "buy or sell."
+        },
+        "quantity": {
+          "type": "number",
+          "required": false,
+          "description": "Number of shares or units."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "trade_id": "string",
+          "request_id": "string",
+          "status": "executed",
+          "executed_at": "ISO-8601 datetime"
+        }
+      }
+    },
+    {
+      "name": "journal_security_positions",
+      "description": "Journal a security position between accounts.",
+      "parameters": {
+        "symbol": {
+          "type": "string",
+          "required": true,
+          "description": "Security symbol."
+        },
+        "quantity": {
+          "type": "number",
+          "required": true,
+          "description": "Quantity to journal."
+        },
+        "from_account_id": {
+          "type": "string",
+          "required": true,
+          "description": "Source account ID."
+        },
+        "to_account_id": {
+          "type": "string",
+          "required": true,
+          "description": "Destination account ID."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "journal_id": "string",
+          "status": "posted",
+          "created_at": "ISO-8601 datetime"
+        }
+      }
+    },
+    {
+      "name": "process_annuity_cancellation",
+      "description": "Process a pending annuity cancellation request and make surrender value available for further handling.",
+      "parameters": {
+        "request_id": {
+          "type": "string",
+          "required": true,
+          "description": "Pending annuity cancellation request ID."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "cancellation_id": "string",
+          "request_id": "string",
+          "status": "processed",
+          "processed_at": "ISO-8601 datetime"
+        }
+      }
+    },
+    {
+      "name": "update_beneficiary_designation",
+      "description": "Update a beneficiary designation when the request is permitted.",
+      "parameters": {
+        "request_id": {
+          "type": "string",
+          "required": true,
+          "description": "Pending beneficiary update request ID."
+        },
+        "account_id": {
+          "type": "string",
+          "required": false,
+          "description": "Account ID for the beneficiary update."
+        },
+        "beneficiary_name": {
+          "type": "string",
+          "required": false,
+          "description": "New beneficiary name."
+        }
+      },
+      "returns": {
+        "type": "object",
+        "fields": {
+          "request_id": "string",
+          "status": "executed",
+          "event_id": "string",
+          "updated_at": "ISO-8601 datetime"
         }
       }
     },

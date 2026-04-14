@@ -389,8 +389,7 @@ def build_task_from_scenario(scenario: dict, solo: bool = False) -> dict:
         f"You are a compliance-aware financial services agent handling customer "
         f"requests. Process incoming requests according to policy. Use the "
         f"available tools to review accounts, take appropriate action, and "
-        f"record your decision.\n\n"
-        f"When you are done, output ###STOP### to end the conversation."
+        f"record your decision."
     )
 
     task: dict[str, Any] = {

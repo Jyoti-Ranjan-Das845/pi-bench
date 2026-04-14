@@ -88,6 +88,26 @@ def evaluate_db(task: dict, simulation: dict, domain: dict) -> float:
     return 1.0
 
 
+def evaluate_db_rich(task: dict, simulation: dict, domain: dict) -> list[dict]:
+    """Run DB replay check and return an explainable result wrapper."""
+    score = evaluate_db(task, simulation, domain)
+    expected_db = task.get("evaluation_criteria", {}).get("expected_db")
+    if score == 1.0 and expected_db:
+        detail = "replayed trajectory matched expected final DB"
+    elif score == 1.0:
+        detail = "replayed trajectory without expected_db completed"
+    elif expected_db:
+        detail = "replayed trajectory did not match expected final DB"
+    else:
+        detail = "DB replay failed before expected_db comparison"
+    return [{
+        "outcome_id": "DB",
+        "type": "db_replay",
+        "passed": score == 1.0,
+        "detail": detail,
+    }]
+
+
 def evaluate_db_checks(
     state_field_outcomes: list[dict],
     env: dict,

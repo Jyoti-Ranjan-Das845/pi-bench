@@ -67,3 +67,39 @@ def test_run_assessment_uses_stable_scenario_seed(monkeypatch, tmp_path):
 
     assert observed["scen_a"] == seed_a_without_prefix == derive_seed(777, "scen_a")
     assert observed["scen_b"] == seed_b_without_prefix == derive_seed(777, "scen_b")
+
+
+def test_run_assessment_builds_trial_work(monkeypatch, tmp_path):
+    scenario_a = tmp_path / "scen_a.json"
+    scenario_a.write_text("{}")
+
+    observed: list[tuple[int, int]] = []
+
+    def fake_run_single_scenario(**kwargs):
+        observed.append((kwargs["trial"], kwargs["seed"]))
+        return {
+            "scenario_id": Path(kwargs["scenario_path"]).stem,
+            "trial": kwargs["trial"],
+            "label": "DENY",
+            "status": "completed",
+            "all_passed": True,
+            "outcome_results": [],
+            "dimensions": {},
+            "canonical_decision": "DENY",
+            "event_flags": {},
+            "duration": 0.0,
+        }
+
+    monkeypatch.setattr(assessment, "_run_single_scenario", fake_run_single_scenario)
+    monkeypatch.setattr(assessment, "discover_scenarios", lambda _path: [scenario_a])
+
+    results = assessment.run_assessment(
+        "http://example.com",
+        {"scenarios_dir": tmp_path, "seed": 777, "num_trials": 2, "concurrency": 2},
+    )
+
+    assert sorted(observed) == [
+        (0, derive_seed(777, "scen_a", 0)),
+        (1, derive_seed(777, "scen_a", 1)),
+    ]
+    assert [r["trial"] for r in results] == [0, 1]

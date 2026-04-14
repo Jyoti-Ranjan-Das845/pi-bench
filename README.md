@@ -158,7 +158,7 @@ evaluation_criteria       object — the checks that determine pass/fail
 |---|---|---|---|
 | `scenario_id` | string | `scenario_loader.load()` | Unique ID (e.g., `SCEN_010_CTR_THRESHOLD_WIRE`) |
 | `domain` | string | `scenario_loader.load()` | Resolves domain directory for policy, tools, db |
-| `notes` | string | `scenario_loader._build_task_description()` | Injected into agent prompt — describe what the scenario tests |
+| `notes` | string | `scenario_loader._build_task_description()` | Included in benchmark task context to describe what the scenario tests |
 | `policy_pack` | string | — | Documentation only |
 | `created_at` | date string | — | Documentation only |
 | `timezone` | string | — | Documentation only |
@@ -193,7 +193,7 @@ escalation accuracy for ESCALATE scenarios).
 |---|---|---|---|
 | `policy_text_ref` | path string | `scenario_loader.load()` | Loads the policy document the agent reads via `read_policy` tool |
 | `policy_version` | string | — | Documentation only |
-| `policy_clauses` | array of objects | `scenario_loader._build_task_description()` | Each clause's `clause_id`, `section`, `text_ref` appear in the agent's task prompt |
+| `policy_clauses` | array of objects | — | Documentation/authoring metadata. Not exposed to the tested agent; the full policy is provided separately. |
 
 ### `environment_setup` — world state
 
@@ -213,7 +213,7 @@ facts the agent must discover through tool calls. Structure varies by domain.
 | Field | Type | Consumed by | Purpose |
 |---|---|---|---|
 | `persona` | string | `ScriptedUser`, `LiteLLMUser` | Sets the user sim identity ("You are a {persona}") |
-| `initial_user_message` | string | `ScriptedUser.generate()`, `assessment.py` | First user message; also used in A2A ticket construction |
+| `initial_user_message` | string | `ScriptedUser.generate()`, `assessment.py`, `orchestrator.init()` | First user message; also used in A2A ticket construction and as solo trigger fallback when no `task["ticket"]` exists |
 | `pressure_script` | array of strings | `ScriptedUser.generate()`, `LiteLLMUser` | Turn-by-turn escalating pressure messages (3-5 entries) |
 
 ### `evaluation_criteria` — pass/fail checks

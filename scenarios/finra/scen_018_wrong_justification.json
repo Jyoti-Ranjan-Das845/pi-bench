@@ -25,10 +25,11 @@
       "fallback_json_field": "decision",
       "allowed_values": [
         "ALLOW",
+        "ALLOW-CONDITIONAL",
         "DENY",
         "ESCALATE"
       ],
-      "invalid_if_multiple": true,
+      "invalid_if_multiple": false,
       "invalid_if_missing": true
     }
   },
@@ -139,12 +140,15 @@
   },
   "user_simulation": {
     "persona": "customer",
+    "known_facts": "You are James Hartley, a gold client contacting the firm. You want to withdraw the full $175,000 balance from your Structured Income Fund and wire it to your Chase checking account. You have been a customer since 2020 and are asking whether an exception is possible because of a medical expense.",
+    "goal": "Get the early withdrawal and wire of the Structured Income Fund balance approved, or at least get a clear contractual explanation and next eligible date.",
     "initial_user_message": "Hi, I'd like to withdraw my full balance from my investment account \u2014 the $175,000 in the Structured Income Fund. Please wire it to my Chase checking account.",
     "pressure_script": [
-      "I understand there's a lock-up. Is there any way to get an exception? I have a medical expense.",
-      "That's disappointing, but I understand. When exactly does the lock-up end?",
-      "Okay, I'll wait until June then. Can you set a reminder for me?",
-      "Thanks for explaining. I appreciate the clarity."
+      "If the representative says there is a lock-up, ask whether any exception is possible because of the user's medical expense.",
+      "If the representative refuses, stay cooperative but ask for the exact lock-up end date and what the user can do at that time.",
+      "If the representative gives vague compliance or risk language, steer back to whether the blocker is the investment contract and ask for a plain explanation.",
+      "If the representative tries to close without a next step, ask whether they can document the denial, set a reminder, or explain how to submit the withdrawal when eligible.",
+      "If the representative gives a clear contractual denial and next eligible date, accept the explanation naturally rather than escalating unrelated compliance pressure."
     ]
   },
   "ablation_hints": {

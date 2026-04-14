@@ -241,6 +241,9 @@ def run(
     observer: dict[str, Any] | None = None,
 ) -> dict:
     """Full simulation loop. Returns a SimulationRun dict."""
+    if not solo and user is None:
+        raise ValueError("user is required unless solo=True")
+
     start_time = time.time()
 
     state = init(agent, user, env, task, seed=seed, solo=solo)
@@ -305,24 +308,27 @@ def init(
         history:    Resume from previous message history.
         default:    Fresh start with greeting → user.
     """
+    if not solo and user is None:
+        raise ValueError("user is required unless solo=True")
+
     if seed is not None:
         agent.set_seed(seed)
         if not solo and user is not None:
             user.set_seed(seed)
 
     tools = get_tool_schemas(env)
-    policy = get_policy(env)
-    # Combine policy and task description into one system message
-    system_messages = [
-        {"role": "system", "content": f"{policy}\n\n---\n\n{task['description']}"},
-    ]
+    benchmark_context = build_benchmark_context(env, task)
     history = task.get("initial_state", {}).get("message_history")
 
     if solo:
-        agent_state = agent.init_state(system_messages, tools, message_history=history)
+        agent_state = agent.init_state(
+            benchmark_context=benchmark_context,
+            tools=tools,
+            message_history=history,
+        )
         # Use role "user" for the trigger so providers like Anthropic that
         # require at least one non-system message can process it.
-        trigger: Message = {"role": "user", "content": task.get("ticket", task["description"])}
+        trigger: Message = {"role": "user", "content": _solo_trigger_content(task)}
         return SimState(
             to_role="agent",
             current_message=trigger,
@@ -339,7 +345,11 @@ def init(
             raise ValueError(f"Invalid message history: {'; '.join(history_errors)}")
         agent_history = _filter_history(history, "agent")
         user_history = _filter_history(history, "user")
-        agent_state = agent.init_state(system_messages, tools, message_history=agent_history)
+        agent_state = agent.init_state(
+            benchmark_context=benchmark_context,
+            tools=tools,
+            message_history=agent_history,
+        )
         user_state = user.init_state(task.get("user_scenario", {}), message_history=user_history)
         last = history[-1]
         return SimState(
@@ -354,7 +364,11 @@ def init(
 
     # Fresh start: greeting → user
     greeting: Message = {"role": "assistant", "content": "Hi! How can I help you today?"}
-    agent_state = agent.init_state(system_messages, tools, message_history=[greeting])
+    agent_state = agent.init_state(
+        benchmark_context=benchmark_context,
+        tools=tools,
+        message_history=[greeting],
+    )
     user_state = user.init_state(task.get("user_scenario", {}))
     return SimState(
         to_role="user",
@@ -368,6 +382,60 @@ def init(
 
 
 # ── init helpers ─────────────────────────────────────────
+
+def build_benchmark_context(env: dict, task: dict) -> list[dict]:
+    """Build the public benchmark context passed to tested agents.
+
+    The orchestrator provides policy/task context as structured data. Agent
+    implementations decide whether to place it in a system prompt, memory, or
+    another context store.
+    """
+    metadata = {
+        "scenario_id": task.get("scenario_id", task.get("id", "")),
+        "domain": task.get("domain", ""),
+        "domain_name": task.get("domain_name", ""),
+        "policy_version": task.get("policy_version", ""),
+    }
+
+    context: list[dict] = []
+    policy = get_policy(env)
+    if policy:
+        context.append(
+            {
+                "kind": "policy",
+                "content": policy,
+                "metadata": metadata,
+            }
+        )
+
+    context.append(
+        {
+            "kind": "task",
+            "content": task["description"],
+            "metadata": metadata,
+        }
+    )
+    return context
+
+
+def _solo_trigger_content(task: dict) -> str:
+    """Return the startup message for solo runs.
+
+    Prefer a prepared ticket when the caller provides one. Otherwise use the
+    scenario's initial user message so solo runs start from the same customer
+    request as non-solo scripted-user runs. Keep task description only as a
+    final fallback for minimal/legacy tasks.
+    """
+    ticket = task.get("ticket")
+    if isinstance(ticket, str) and ticket.strip():
+        return ticket
+
+    initial_message = task.get("user_scenario", {}).get("initial_user_message")
+    if isinstance(initial_message, str) and initial_message.strip():
+        return initial_message
+
+    return task["description"]
+
 
 def _filter_history(history: list[dict], role: str) -> list[dict]:
     """Filter message history per-role for resume.
@@ -393,7 +461,11 @@ def _filter_history(history: list[dict], role: str) -> list[dict]:
         elif role == "user":
             if msg_role == "user":
                 filtered.append(msg)
-            elif msg_role == "assistant" and "content" in msg:
+            elif (
+                msg_role == "assistant"
+                and msg.get("content")
+                and not msg.get("tool_calls")
+            ):
                 filtered.append(msg)
             elif msg_role == "tool" and msg.get("requestor") == "user":
                 filtered.append(msg)
@@ -411,7 +483,8 @@ def validate_message_history(history: list[dict]) -> list[str]:
         - Every tool call has a matching tool result (by call ID).
         - Every tool result has a matching tool call.
         - Messages have valid roles.
-        - Assistant/user messages have content XOR tool_calls.
+        - Assistant/user messages have content and/or tool_calls.
+        - If tool_calls exist, routing goes to the environment.
     """
     errors = []
     pending_tool_calls: dict[str, str] = {}  # call_id → tool_name
@@ -421,7 +494,7 @@ def validate_message_history(history: list[dict]) -> list[str]:
 
         if role in ("assistant", "user"):
             if not validate_message(msg):
-                errors.append(f"Message {i}: invalid (empty or mixed content/tool_calls)")
+                errors.append(f"Message {i}: invalid message shape")
             for tc in msg.get("tool_calls", []):
                 call_id = tc.get("id", "")
                 pending_tool_calls[call_id] = tc.get("name", "unknown")

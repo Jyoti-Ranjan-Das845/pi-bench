@@ -7,7 +7,15 @@
     "junior_analyst_tenure_threshold_months": 24
   },
   "customer_profile": {},
+  "customers": {},
   "account_status": {},
+  "transactions": [],
+  "account_events": [],
+  "related_account_activity": {},
+  "certificate_deposits": [],
+  "securities": {},
+  "positions": {},
+  "journal_entries": [],
   "activity": {
     "pending_requests": [],
     "money_movements": [],

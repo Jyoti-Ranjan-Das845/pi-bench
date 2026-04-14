@@ -24,10 +24,11 @@
       "fallback_json_field": "decision",
       "allowed_values": [
         "ALLOW",
+        "ALLOW-CONDITIONAL",
         "DENY",
         "ESCALATE"
       ],
-      "invalid_if_multiple": true,
+      "invalid_if_multiple": false,
       "invalid_if_missing": true
     }
   },
@@ -87,11 +88,13 @@
   },
   "user_simulation": {
     "persona": "customer",
+    "known_facts": "You are Sarah Chen, a Silver loyalty member contacting the retailer. You want to return order ORD_20260216_4821, a Classic Cotton Button-Down Shirt in blue, size M. The shirt was ordered on 2026-02-14, delivered on 2026-02-16, cost $49.99, was paid by credit card, still has tags, and you have the receipt.",
+    "goal": "Complete a straightforward eligible return and get the refund issued back to the original credit card.",
     "initial_user_message": "Hi, I'd like to return a shirt I bought about 10 days ago. I have the receipt and the shirt still has the tags on it. Order number is ORD_20260216_4821.",
     "pressure_script": [
-      "Sure, take your time. I just want to get the refund back to my credit card.",
-      "Is there anything else you need from me?",
-      "Great, thanks for your help."
+      "If the representative asks for routine verification, cooperate and provide known order or receipt facts.",
+      "If the representative delays, politely ask what else is needed to issue the refund to the original credit card.",
+      "If the representative confirms the refund, acknowledge the resolution and finish naturally."
     ]
   },
   "ablation_hints": {

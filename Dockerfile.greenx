@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.11-slim
+
+LABEL org.opencontainers.image.title="pibench-greenx"
+LABEL org.opencontainers.image.description="PI-Bench AgentBeats green benchmark server"
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+COPY domains/ ./domains/
+COPY scenarios/ ./scenarios/
+
+RUN python -m pip install --upgrade pip \
+    && pip install --no-cache-dir .
+
+RUN mkdir -p /app/output
+
+EXPOSE 9009
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:9009/health || exit 1
+
+ENTRYPOINT ["pi-bench-green"]
+CMD ["--host", "0.0.0.0", "--port", "9009", "--scenarios-dir", "/app/scenarios"]

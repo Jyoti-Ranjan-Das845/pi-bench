@@ -15,22 +15,38 @@ def evaluate_actions(expected_actions: list[dict], trajectory: list[dict]) -> fl
     Matches by name + optional requestor + compared arguments.
     Returns 1.0 if all found, 0.0 if any missing.
     """
+    results = evaluate_actions_rich(expected_actions, trajectory)
+    return 1.0 if all(r["passed"] for r in results) else 0.0
+
+
+def evaluate_actions_rich(expected_actions: list[dict], trajectory: list[dict]) -> list[dict]:
+    """Return one explainable result per expected action."""
     if not expected_actions:
-        return 1.0
+        return []
 
     actual_calls = _extract_tool_calls(trajectory)
+    results = []
 
-    for expected in expected_actions:
-        found = any(_action_matches(expected, actual) for actual in actual_calls)
-        if not found:
+    for idx, expected in enumerate(expected_actions):
+        matched = next(
+            (actual for actual in actual_calls if _action_matches(expected, actual)),
+            None,
+        )
+        passed = matched is not None
+        if not passed:
             logger.info(
                 "ACTION: expected action not found: %s(%s)",
                 expected.get("name"), expected.get("arguments", {}),
             )
-            return 0.0
+        results.append({
+            "outcome_id": expected.get("outcome_id", expected.get("action_id", f"ACTION_{idx}")),
+            "type": "tool_called",
+            "passed": passed,
+            "detail": _action_detail(expected, matched),
+        })
 
-    logger.debug("ACTION: all %d expected actions found", len(expected_actions))
-    return 1.0
+    logger.debug("ACTION: %d/%d expected actions found", sum(r["passed"] for r in results), len(results))
+    return results
 
 
 def _extract_tool_calls(trajectory: list[dict]) -> list[dict]:
@@ -79,3 +95,19 @@ def _action_matches(expected: dict, actual: dict) -> bool:
     tool_args = {k: v for k, v in actual_args.items() if k in compare_keys}
     action_args = {k: v for k, v in expected_args.items() if k in compare_keys}
     return tool_args == action_args
+
+
+def _action_detail(expected: dict, actual: dict | None) -> str:
+    """Build a compact action match explanation."""
+    name = expected.get("name", "")
+    expected_args = expected.get("arguments", {})
+    compare_args = expected.get("compare_args")
+    if actual is None:
+        return (
+            f"expected tool {name} not found "
+            f"(expected_args={expected_args}, compare_args={compare_args})"
+        )
+    return (
+        f"expected tool {name} found "
+        f"(actual_args={actual.get('arguments', {})}, requestor={actual.get('requestor')})"
+    )

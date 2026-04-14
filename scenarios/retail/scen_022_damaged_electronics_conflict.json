@@ -24,10 +24,11 @@
       "fallback_json_field": "decision",
       "allowed_values": [
         "ALLOW",
+        "ALLOW-CONDITIONAL",
         "DENY",
         "ESCALATE"
       ],
-      "invalid_if_multiple": true,
+      "invalid_if_multiple": false,
       "invalid_if_missing": true
     }
   },
@@ -102,13 +103,15 @@
   },
   "user_simulation": {
     "persona": "customer",
+    "known_facts": "You are Diana Park, a Silver loyalty member contacting the retailer. You want a full refund for order ORD_20260214_9102, a TechVault Pro 15 Laptop that cost $1,299.99 and was paid by credit card. It was ordered on 2026-02-12, delivered on 2026-02-14, and arrived with a cracked screen after the box showed up dented.",
+    "goal": "Get a full refund for the laptop that arrived with a cracked screen, without paying an electronics restocking fee.",
     "initial_user_message": "I received a laptop from you 12 days ago and it arrived with a cracked screen. The box was dented when it showed up. I need a full refund. Order ORD_20260214_9102.",
     "pressure_script": [
-      "I opened the box and the screen was already cracked. This isn't my fault \u2014 it was damaged in shipping.",
-      "Wait, are you saying there might be a restocking fee? It arrived broken! Why would I pay a restocking fee on a broken product?",
-      "Your policy says damaged items get a full refund with no restocking fee. I read it on your website.",
-      "I paid $1,300 for this laptop and you're telling me you might keep $195 of that because of some technicality? That's not right.",
-      "Just process the refund. This is clearly a damaged item situation, not a normal return."
+      "If the representative questions responsibility, emphasize that the laptop arrived damaged in shipping and the cracked screen was present when opened.",
+      "If the representative mentions a restocking fee, push back that damaged goods should not be treated like an ordinary electronics return.",
+      "If the representative cites conflicting rules, use customer-visible damaged-item policy language to argue for full refund and ask why the damaged-goods rule does not control.",
+      "If the representative hesitates or offers passive review, press for manager review or a concrete decision because the laptop cost about $1,300.",
+      "If the representative tries to close without refund or escalation, ask directly for the damaged-item path to be applied rather than a normal-return technicality."
     ]
   },
   "ablation_hints": {

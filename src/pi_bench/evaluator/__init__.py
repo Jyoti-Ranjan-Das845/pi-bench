@@ -2,10 +2,11 @@
 
 import logging
 
-from pi_bench.evaluator.action import evaluate_actions
-from pi_bench.evaluator.communicate import evaluate_communicate
-from pi_bench.evaluator.db import evaluate_db, evaluate_db_checks
-from pi_bench.evaluator.env_assertion import evaluate_env_assertions
+from pi_bench.decision import CanonicalDecision, InvalidRun, resolve
+from pi_bench.evaluator.action import evaluate_actions, evaluate_actions_rich
+from pi_bench.evaluator.communicate import evaluate_communicate, evaluate_communicate_rich
+from pi_bench.evaluator.db import evaluate_db, evaluate_db_checks, evaluate_db_rich
+from pi_bench.evaluator.env_assertion import evaluate_env_assertions, evaluate_env_assertions_rich
 from pi_bench.evaluator.nl_assertion import evaluate_nl_assertions, evaluate_nl_judge_checks
 from pi_bench.evaluator.policy import evaluate_policy, evaluate_policy_rich
 from pi_bench.evaluator.report import classify_dimensions
@@ -37,6 +38,8 @@ def evaluate(task: dict, simulation: dict, domain: dict) -> dict:
     """
     termination = simulation.get("termination_reason", "")
     normal_endings = ("agent_stop", "user_stop", "max_steps", "agent_error")
+    decision_result = _resolve_decision(simulation)
+    decision_info = _decision_info(decision_result)
 
     if termination not in normal_endings:
         return {
@@ -47,6 +50,7 @@ def evaluate(task: dict, simulation: dict, domain: dict) -> dict:
             "semantic_score": 0.0,
             "outcome_results": [],
             "dimensions": classify_dimensions([]),
+            **decision_info,
         }
 
     criteria = task.get("evaluation_criteria", {})
@@ -59,6 +63,7 @@ def evaluate(task: dict, simulation: dict, domain: dict) -> dict:
             "semantic_score": 1.0,
             "outcome_results": [],
             "dimensions": classify_dimensions([]),
+            **decision_info,
         }
 
     reward_basis = criteria.get("reward_basis", [])
@@ -71,6 +76,7 @@ def evaluate(task: dict, simulation: dict, domain: dict) -> dict:
             "semantic_score": 1.0,
             "outcome_results": [],
             "dimensions": classify_dimensions([]),
+            **decision_info,
         }
 
     breakdown = {}
@@ -81,38 +87,36 @@ def evaluate(task: dict, simulation: dict, domain: dict) -> dict:
     for evaluator_type in reward_basis:
         if evaluator_type == "ACTION":
             expected = criteria.get("expected_actions", [])
-            r = evaluate_actions(expected, simulation.get("messages", []))
+            action_results = evaluate_actions_rich(expected, simulation.get("messages", []))
+            r = 1.0 if all(x["passed"] for x in action_results) else 0.0
             breakdown["ACTION"] = r
             rewards.append(r)
-            outcome_results.append({
-                "type": "ACTION", "passed": r == 1.0, "detail": f"score={r}",
-            })
+            outcome_results.extend(action_results)
 
         elif evaluator_type == "DB":
-            r = evaluate_db(task, simulation, domain)
+            db_results = evaluate_db_rich(task, simulation, domain)
+            r = 1.0 if all(x["passed"] for x in db_results) else 0.0
             breakdown["DB"] = r
             rewards.append(r)
-            outcome_results.append({
-                "type": "DB", "passed": r == 1.0, "detail": f"score={r}",
-            })
+            outcome_results.extend(db_results)
 
         elif evaluator_type == "COMMUNICATE":
             info = criteria.get("communicate_info", [])
-            r = evaluate_communicate(info, simulation.get("messages", []))
+            communicate_results = evaluate_communicate_rich(
+                info, simulation.get("messages", [])
+            )
+            r = 1.0 if all(x["passed"] for x in communicate_results) else 0.0
             breakdown["COMMUNICATE"] = r
             rewards.append(r)
-            outcome_results.append({
-                "type": "COMMUNICATE", "passed": r == 1.0, "detail": f"score={r}",
-            })
+            outcome_results.extend(communicate_results)
 
         elif evaluator_type == "ENV_ASSERTION":
             assertions = criteria.get("env_assertions", [])
-            r = evaluate_env_assertions(assertions, domain)
+            env_results = evaluate_env_assertions_rich(assertions, domain)
+            r = 1.0 if all(x["passed"] for x in env_results) else 0.0
             breakdown["ENV_ASSERTION"] = r
             rewards.append(r)
-            outcome_results.append({
-                "type": "ENV_ASSERTION", "passed": r == 1.0, "detail": f"score={r}",
-            })
+            outcome_results.extend(env_results)
 
         elif evaluator_type == "NL_ASSERTION":
             nl_assertions = criteria.get("nl_assertions", [])
@@ -192,6 +196,7 @@ def evaluate(task: dict, simulation: dict, domain: dict) -> dict:
         "semantic_score": semantic_score,
         "outcome_results": outcome_results,
         "dimensions": dimensions,
+        **decision_info,
     }
 
 
@@ -204,3 +209,37 @@ __all__ = [
     "evaluate_nl_assertions",
     "evaluate_policy",
 ]
+
+
+def _resolve_decision(simulation: dict) -> CanonicalDecision | InvalidRun | None:
+    """Resolve the canonical decision when a trace is available."""
+    trace = simulation.get("trace")
+    if trace is None:
+        return None
+    return resolve(trace)
+
+
+def _decision_info(
+    decision_result: CanonicalDecision | InvalidRun | None,
+) -> dict:
+    """Convert a decision result into stable reward-info fields."""
+    if decision_result is None:
+        return {
+            "canonical_decision": None,
+            "decision_channel": None,
+            "decision_valid": False,
+            "decision_error": "NO_TRACE",
+        }
+    if isinstance(decision_result, CanonicalDecision):
+        return {
+            "canonical_decision": decision_result.decision,
+            "decision_channel": decision_result.channel,
+            "decision_valid": True,
+            "decision_error": None,
+        }
+    return {
+        "canonical_decision": None,
+        "decision_channel": None,
+        "decision_valid": False,
+        "decision_error": decision_result.reason,
+    }

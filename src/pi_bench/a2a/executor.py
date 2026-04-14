@@ -19,7 +19,7 @@ from typing_extensions import override
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
-from a2a.types import DataPart, Part, TextPart
+from a2a.types import DataPart, Part, TaskState, TextPart
 from a2a.utils import new_agent_text_message, new_task
 
 from pi_bench.a2a.assessment import run_assessment
@@ -122,10 +122,19 @@ class PIBenchExecutor(AgentExecutor):
 
             t0 = time.monotonic()
 
-            scenario_results = await asyncio.to_thread(
-                run_assessment,
-                purple_url=envelope.purple_url,
-                config=envelope.config,
+            assessment_task = asyncio.create_task(
+                asyncio.to_thread(
+                    run_assessment,
+                    purple_url=envelope.purple_url,
+                    config=envelope.config,
+                )
+            )
+            scenario_results = await _await_with_heartbeat(
+                assessment_task=assessment_task,
+                updater=updater,
+                context_id=context_id,
+                task_id=task.id,
+                started_at=t0,
             )
 
             elapsed = time.monotonic() - t0
@@ -184,6 +193,39 @@ class PIBenchExecutor(AgentExecutor):
                 json.dumps({"error": "Cancellation not supported"})
             )
         )
+
+
+async def _await_with_heartbeat(
+    *,
+    assessment_task: asyncio.Task,
+    updater: TaskUpdater,
+    context_id: str,
+    task_id: str,
+    started_at: float,
+    interval_seconds: int = 60,
+) -> list[dict]:
+    """Wait for a long assessment while keeping streaming clients alive."""
+    while True:
+        done, _ = await asyncio.wait({assessment_task}, timeout=interval_seconds)
+        if done:
+            return await assessment_task
+
+        elapsed = int(time.monotonic() - started_at)
+        try:
+            await updater.update_status(
+                TaskState.working,
+                new_agent_text_message(
+                    json.dumps({
+                        "status": "working",
+                        "message": "PI-Bench assessment still running",
+                        "elapsed_seconds": elapsed,
+                    }),
+                    context_id=context_id,
+                    task_id=task_id,
+                ),
+            )
+        except Exception:
+            logger.warning("Failed to send assessment heartbeat", exc_info=True)
 
 
 def _extract_request_data(context: RequestContext) -> dict[str, Any]:

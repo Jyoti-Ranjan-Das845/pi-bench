@@ -1,0 +1,45 @@
+{
+  manifest_version: "0.1.0",
+  program: {
+    image: "ghcr.io/jyoti-ranjan-das845/pi-bench-green:latest",
+    entrypoint: [
+      "pi-bench-green",
+      "--host",
+      "0.0.0.0",
+      "--port",
+      "9009"
+    ],
+    env: {
+      PROXY_URL: "${slots.proxy.url}",
+      OPENAI_API_KEY: "${config.openai_api_key}"
+    },
+    network: {
+      endpoints: [
+        { name: "endpoint", port: 9009 }
+      ]
+    }
+  },
+  config_schema: {
+    type: "object",
+    properties: {
+      openai_api_key: { type: "string", secret: true }
+    },
+    required: ["openai_api_key"],
+    additionalProperties: false
+  },
+  slots: {
+    proxy: { kind: "a2a" }
+  },
+  provides: {
+    a2a: { kind: "a2a", endpoint: "endpoint" }
+  },
+  exports: {
+    a2a: "a2a"
+  },
+  metadata: {
+    assessment_config: {
+      "domain": "all",
+    },
+    participant_roles: ["agent"]
+  },
+}
